@@ -21,8 +21,9 @@ export async function POST(request: Request) {
     }
 
     // Validate file type
-    const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/ogg'];
-    if (!allowedTypes.includes(file.type)) {
+    const allowedExtensions = ['.mp3', '.wav', '.m4a', '.ogg'];
+    const fileName = file.name.toLowerCase();
+    if (!allowedExtensions.some(ext => fileName.endsWith(ext))) {
       return NextResponse.json(
         { error: 'Invalid file type. Only MP3, WAV, M4A, and OGG files are allowed.' },
         { status: 400 }
