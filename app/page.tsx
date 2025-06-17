@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { CloudArrowUpIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 
@@ -13,6 +14,7 @@ interface AudioFile {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -22,8 +24,19 @@ export default function Home() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   useEffect(() => {
+    // Check authentication
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
     fetchAudioFiles();
-  }, []);
+  }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated');
+    router.push('/login');
+  };
 
   const fetchAudioFiles = async () => {
     try {
@@ -89,7 +102,15 @@ export default function Home() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8">Meandering Sleep CMS</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Meandering Sleep CMS</h1>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          Logout
+        </button>
+      </div>
       
       <div className="mb-8">
         <div
