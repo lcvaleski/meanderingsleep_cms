@@ -57,14 +57,22 @@ export default function Home() {
     router.push('/login');
   };
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
     setSelectedFile(file);
+    setError(null);
+    setUploadSuccess(false);
+  }, []);
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    
     setUploading(true);
     setUploadProgress(0);
     setError(null);
     setUploadSuccess(false);
+    
     try {
       if (!title.trim()) {
         setError('Please enter a title');
@@ -72,7 +80,7 @@ export default function Home() {
         return;
       }
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', selectedFile);
       formData.append('title', title);
       if (activeTab === 'history') {
         formData.append('folder', 'boringhistory');
@@ -99,7 +107,7 @@ export default function Home() {
       setUploadProgress(0);
       setTimeout(() => setUploadSuccess(false), 2000);
     }
-  }, [activeTab, fetchAudioFiles, gender, title, topic]);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -225,7 +233,7 @@ export default function Home() {
           {...getRootProps()}
           className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200
             ${isDragActive ? 'border-blue-500 bg-blue-50 shadow-lg' : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50'}
-            ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            ${uploading || selectedFile ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <input {...getInputProps()} />
           <CloudArrowUpIcon className="w-12 h-12 text-blue-400 mb-2" />
@@ -258,6 +266,19 @@ export default function Home() {
         </div>
         {error && (
           <div className="mt-2 flex items-center text-red-500 text-sm"><ExclamationCircleIcon className="w-5 h-5 mr-1" />{error}</div>
+        )}
+        {selectedFile && !uploading && (
+          <button
+            onClick={handleUpload}
+            disabled={!title.trim()}
+            className={`mt-4 px-6 py-3 rounded-lg font-medium transition-all ${
+              title.trim() 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            Upload {selectedFile.name}
+          </button>
         )}
       </div>
 
