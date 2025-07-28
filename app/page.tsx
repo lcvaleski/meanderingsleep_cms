@@ -23,6 +23,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [title, setTitle] = useState('');
+  const [gender, setGender] = useState<'male' | 'female'>('female');
+  const [topic, setTopic] = useState<'boring' | 'meandering'>('boring');
 
   useEffect(() => {
     // Check authentication
@@ -63,10 +66,19 @@ export default function Home() {
     setError(null);
     setUploadSuccess(false);
     try {
+      if (!title.trim()) {
+        setError('Please enter a title');
+        setUploading(false);
+        return;
+      }
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('title', title);
       if (activeTab === 'history') {
         formData.append('folder', 'boringhistory');
+      } else {
+        formData.append('gender', gender);
+        formData.append('topic', topic);
       }
       const response = await fetch('/api/files/upload', {
         method: 'POST',
@@ -78,6 +90,7 @@ export default function Home() {
       }
       setUploadSuccess(true);
       setSelectedFile(null);
+      setTitle('');
       await fetchAudioFiles();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Upload failed');
@@ -140,6 +153,70 @@ export default function Home() {
               History Sleep
             </button>
           </nav>
+        </div>
+      </div>
+      
+      <div className="mb-8">
+        <div className="mb-4 space-y-4">
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+              Title *
+            </label>
+            <input
+              type="text"
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={activeTab === 'history' ? 'e.g. The Rise of Ancient Rome' : 'e.g. Introduction to Mosaics'}
+            />
+          </div>
+          
+          {activeTab === 'meandering' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Topic
+                </label>
+                <select
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value as 'boring' | 'meandering')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="boring">Boring</option>
+                  <option value="meandering">Meandering</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Gender
+                </label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="female"
+                      checked={gender === 'female'}
+                      onChange={(e) => setGender(e.target.value as 'male' | 'female')}
+                      className="mr-2"
+                    />
+                    Female
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="male"
+                      checked={gender === 'male'}
+                      onChange={(e) => setGender(e.target.value as 'male' | 'female')}
+                      className="mr-2"
+                    />
+                    Male
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
       
