@@ -27,22 +27,7 @@ export default function Home() {
   const [gender, setGender] = useState<'male' | 'female'>('female');
   const [topic, setTopic] = useState<'boring' | 'meandering'>('boring');
 
-  useEffect(() => {
-    // Check authentication
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    fetchAudioFiles();
-  }, [router, activeTab]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    router.push('/login');
-  };
-
-  const fetchAudioFiles = async () => {
+  const fetchAudioFiles = useCallback(async () => {
     try {
       const res = await fetch(`/api/files?folder=${activeTab === 'history' ? 'boringhistory' : ''}`);
       const data = await res.json();
@@ -55,6 +40,21 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }, [activeTab]);
+
+  useEffect(() => {
+    // Check authentication
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    fetchAudioFiles();
+  }, [router, activeTab, fetchAudioFiles]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated');
+    router.push('/login');
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -99,7 +99,7 @@ export default function Home() {
       setUploadProgress(0);
       setTimeout(() => setUploadSuccess(false), 2000);
     }
-  }, []);
+  }, [activeTab, fetchAudioFiles, gender, title, topic]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

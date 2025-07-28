@@ -14,7 +14,7 @@ function generateRandomId(): string {
 }
 
 // Get the next HIST number for History Sleep
-async function getNextHistoryNumber(bucket: any): Promise<string> {
+async function getNextHistoryNumber(bucket: ReturnType<Storage['bucket']>): Promise<string> {
   try {
     // Read the JSON from the bucket
     const file = bucket.file('history-audio-list.json');
@@ -45,12 +45,20 @@ async function getNextHistoryNumber(bucket: any): Promise<string> {
 }
 
 // Update JSON file in the bucket
-async function updateJsonInBucket(bucket: any, fileName: string, newEntry: any) {
+interface AudioEntry {
+  id: string;
+  title?: string;
+  topic?: string;
+  subtopic?: string;
+  gender?: string;
+}
+
+async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileName: string, newEntry: AudioEntry) {
   try {
     const file = bucket.file(fileName);
     const [exists] = await file.exists();
     
-    let json = { audios: [] };
+    let json: { audios: AudioEntry[] } = { audios: [] };
     
     if (exists) {
       const [contents] = await file.download();
@@ -111,7 +119,7 @@ export async function POST(request: Request) {
     // Determine the file name based on the app type
     let fileName: string;
     let uploadPath: string;
-    let jsonEntry: any;
+    let jsonEntry: AudioEntry;
     let jsonFileName: string;
 
     if (folder === 'boringhistory') {
