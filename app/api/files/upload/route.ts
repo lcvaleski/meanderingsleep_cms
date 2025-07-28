@@ -12,6 +12,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
+    const folder = formData.get('folder') as string | null;
     
     if (!file) {
       return NextResponse.json(
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
 
     // Validate file type
     const allowedExtensions = ['.mp3', '.wav', '.m4a', '.ogg'];
-    const fileName = file.name.toLowerCase();
-    if (!allowedExtensions.some(ext => fileName.endsWith(ext))) {
+    const fileNameLower = file.name.toLowerCase();
+    if (!allowedExtensions.some(ext => fileNameLower.endsWith(ext))) {
       return NextResponse.json(
         { error: 'Invalid file type. Only MP3, WAV, M4A, and OGG files are allowed.' },
         { status: 400 }
@@ -35,7 +36,8 @@ export async function POST(request: Request) {
 
     // Upload to Google Cloud Storage
     const bucket = storage.bucket(bucketName);
-    const blob = bucket.file(file.name);
+    const uploadPath = folder ? `${folder}/${file.name}` : file.name;
+    const blob = bucket.file(uploadPath);
     
     await blob.save(buffer, {
       metadata: {
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
         name: file.name,
         size: file.size,
         contentType: file.type,
-        url: `https://storage.googleapis.com/${bucketName}/${file.name}`,
+        url: `https://storage.googleapis.com/${bucketName}/${uploadPath}`,
       },
     });
   } catch (error) {

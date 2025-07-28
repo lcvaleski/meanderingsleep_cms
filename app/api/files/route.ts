@@ -8,7 +8,9 @@ const storage = new Storage({
 
 const bucketName = process.env.GOOGLE_CLOUD_BUCKET_NAME || '';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const folder = searchParams.get('folder') || '';
   try {
     // Validate environment variables
     if (!process.env.GOOGLE_CLOUD_PROJECT_ID) {
@@ -22,13 +24,13 @@ export async function GET() {
     }
 
     const [files] = await storage.bucket(bucketName).getFiles({
-      prefix: '', // You can add a prefix to filter files
+      prefix: folder ? `${folder}/` : '',
     });
 
     const audioFiles = files
       .filter(file => file.name.match(/\.(mp3|wav|m4a|ogg)$/i))
       .map(file => ({
-        name: file.name,
+        name: folder ? file.name.replace(`${folder}/`, '') : file.name,
         size: file.metadata.size,
         contentType: file.metadata.contentType,
         updated: file.metadata.updated,

@@ -15,6 +15,7 @@ interface AudioFile {
 
 export default function Home() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'meandering' | 'history'>('meandering');
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -31,7 +32,7 @@ export default function Home() {
       return;
     }
     fetchAudioFiles();
-  }, [router]);
+  }, [router, activeTab]);
 
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
@@ -40,7 +41,7 @@ export default function Home() {
 
   const fetchAudioFiles = async () => {
     try {
-      const res = await fetch('/api/files');
+      const res = await fetch(`/api/files?folder=${activeTab === 'history' ? 'historysleep' : ''}`);
       const data = await res.json();
       if (data.files) {
         setAudioFiles(data.files);
@@ -64,6 +65,9 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (activeTab === 'history') {
+        formData.append('folder', 'historysleep');
+      }
       const response = await fetch('/api/files/upload', {
         method: 'POST',
         body: formData,
@@ -103,13 +107,40 @@ export default function Home() {
   return (
     <main className="p-8 max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Meandering Sleep CMS</h1>
+        <h1 className="text-3xl font-bold">Audio CMS Manager</h1>
         <button
           onClick={handleLogout}
           className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
         >
           Logout
         </button>
+      </div>
+      
+      <div className="mb-8">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('meandering')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'meandering'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Meandering Sleep
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'history'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              History Sleep
+            </button>
+          </nav>
+        </div>
       </div>
       
       <div className="mb-8">
@@ -154,7 +185,7 @@ export default function Home() {
       </div>
 
       <div>
-        <h2 className="text-xl font-semibold mb-4">Audio Files</h2>
+        <h2 className="text-xl font-semibold mb-4">{activeTab === 'meandering' ? 'Meandering Sleep' : 'History Sleep'} Audio Files</h2>
         {loading ? (
           <p>Loading files...</p>
         ) : audioFiles.length === 0 ? (
