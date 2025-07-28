@@ -28,7 +28,15 @@ export async function GET(request: Request) {
     });
 
     const audioFiles = files
-      .filter(file => file.name.match(/\.(mp3|wav|m4a|ogg)$/i))
+      .filter(file => {
+        // Check if it's an audio file
+        if (!file.name.match(/\.(mp3|wav|m4a|ogg)$/i)) return false;
+        
+        // If we're looking for root files (Meandering Sleep), exclude boringhistory folder
+        if (!folder && file.name.startsWith('boringhistory/')) return false;
+        
+        return true;
+      })
       .map(file => ({
         name: folder ? file.name.replace(`${folder}/`, '') : file.name,
         size: file.metadata.size,
