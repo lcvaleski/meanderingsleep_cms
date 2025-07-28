@@ -41,7 +41,7 @@ export default function Home() {
 
   const fetchAudioFiles = async () => {
     try {
-      const res = await fetch(`/api/files?folder=${activeTab === 'history' ? 'historysleep' : ''}`);
+      const res = await fetch(`/api/files?folder=${activeTab === 'history' ? 'boringhistory' : ''}`);
       const data = await res.json();
       if (data.files) {
         setAudioFiles(data.files);
@@ -66,7 +66,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append('file', file);
       if (activeTab === 'history') {
-        formData.append('folder', 'historysleep');
+        formData.append('folder', 'boringhistory');
       }
       const response = await fetch('/api/files/upload', {
         method: 'POST',
