@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
-import { CloudArrowUpIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, CheckCircleIcon, ExclamationCircleIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 interface AudioFile {
   name: string;
@@ -41,6 +41,29 @@ export default function Home() {
       setLoading(false);
     }
   }, [activeTab]);
+
+  const handleDelete = async (fileName: string) => {
+    if (!confirm(`Are you sure you want to delete ${fileName}?`)) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`/api/files?fileName=${encodeURIComponent(fileName)}&folder=boringhistory`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete file');
+      }
+      
+      // Refresh the file list
+      await fetchAudioFiles();
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete file');
+    }
+  };
 
   useEffect(() => {
     // Check authentication
@@ -299,10 +322,21 @@ export default function Home() {
                       {formatFileSize(file.size)} • {new Date(file.updated).toLocaleDateString()}
                     </p>
                   </div>
-                  <audio controls className="w-64">
-                    <source src={file.url} type={file.contentType} />
-                    Your browser does not support the audio element.
-                  </audio>
+                  <div className="flex items-center gap-4">
+                    <audio controls className="w-64">
+                      <source src={file.url} type={file.contentType} />
+                      Your browser does not support the audio element.
+                    </audio>
+                    {activeTab === 'history' && (
+                      <button
+                        onClick={() => handleDelete(file.name)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        title="Delete file"
+                      >
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

@@ -57,4 +57,70 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const fileName = searchParams.get('fileName');
+    const folder = searchParams.get('folder') || '';
+    
+    if (!fileName) {
+      return NextResponse.json(
+        { error: 'File name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Only allow deletion for History Sleep files
+    if (folder !== 'boringhistory') {
+      return NextResponse.json(
+        { error: 'Deletion is only allowed for History Sleep files' },
+        { status: 403 }
+      );
+    }
+
+    const bucket = storage.bucket(bucketName);
+    const filePath = `${folder}/${fileName}`;
+    
+    // Delete the file from storage
+    await bucket.file(filePath).delete();
+    
+    // Update the JSON file
+    const jsonFileName = 'history-audio-list.json';
+    const jsonFile = bucket.file(jsonFileName);
+    const [exists] = await jsonFile.exists();
+    
+    if (exists) {
+      const [contents] = await jsonFile.download();
+      const json = JSON.parse(contents.toString());
+      
+      // Extract ID from filename (HIST001.mp3 -> HIST001)
+      const idToRemove = fileName.replace('.mp3', '');
+      
+      // Filter out the deleted entry
+      json.audios = json.audios.filter((audio: any) => audio.id !== idToRemove);
+      
+      // Save updated JSON
+      await jsonFile.save(JSON.stringify(json, null, 2), {
+        metadata: {
+          contentType: 'application/json',
+        },
+      });
+      
+      // Make sure JSON file remains public
+      await jsonFile.makePublic();
+    }
+    
+    return NextResponse.json({ message: 'File deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to delete file',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
 } 
