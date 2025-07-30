@@ -99,7 +99,7 @@ export async function DELETE(request: Request) {
       const idToRemove = fileName.replace('.mp3', '');
       
       // Filter out the deleted entry
-      json.audios = json.audios.filter((audio: any) => audio.id !== idToRemove);
+      json.audios = json.audios.filter((audio: { id: string }) => audio.id !== idToRemove);
       
       // Save updated JSON
       await jsonFile.save(JSON.stringify(json, null, 2), {
