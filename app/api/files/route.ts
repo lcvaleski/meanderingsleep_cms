@@ -92,24 +92,47 @@ export async function DELETE(request: Request) {
     const [exists] = await jsonFile.exists();
     
     if (exists) {
-      const [contents] = await jsonFile.download();
-      const json = JSON.parse(contents.toString());
-      
-      // Extract ID from filename (HIST001.mp3 -> HIST001)
-      const idToRemove = fileName.replace('.mp3', '');
-      
-      // Filter out the deleted entry
-      json.audios = json.audios.filter((audio: { id: string }) => audio.id !== idToRemove);
-      
-      // Save updated JSON
-      await jsonFile.save(JSON.stringify(json, null, 2), {
-        metadata: {
-          contentType: 'application/json',
-        },
-      });
-      
-      // Make sure JSON file remains public
-      await jsonFile.makePublic();
+      try {
+        const [contents] = await jsonFile.download();
+        const contentStr = contents.toString().trim();
+        
+        let json: { audios: Array<{ id: string }> } = { audios: [] };
+        
+        // Handle empty or malformed JSON
+        if (contentStr && contentStr !== 'audios []') {
+          json = JSON.parse(contentStr);
+        }
+        
+        // Ensure json has the correct structure
+        if (!json.audios || !Array.isArray(json.audios)) {
+          json = { audios: [] };
+        }
+        
+        // Extract ID from filename (HIST001.mp3 -> HIST001)
+        const idToRemove = fileName.replace('.mp3', '');
+        
+        // Filter out the deleted entry
+        json.audios = json.audios.filter((audio: { id: string }) => audio.id !== idToRemove);
+        
+        // Save updated JSON
+        await jsonFile.save(JSON.stringify(json, null, 2), {
+          metadata: {
+            contentType: 'application/json',
+          },
+        });
+        
+        // Make sure JSON file remains public
+        await jsonFile.makePublic();
+      } catch (parseError) {
+        console.error('Error parsing/updating JSON:', parseError);
+        // If JSON is corrupted, reset it
+        await jsonFile.save(JSON.stringify({ audios: [] }, null, 2), {
+          metadata: {
+            contentType: 'application/json',
+          },
+        });
+        await jsonFile.makePublic();
+      }
     }
     
     return NextResponse.json({ message: 'File deleted successfully' });

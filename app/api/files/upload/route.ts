@@ -61,8 +61,23 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
     let json: { audios: AudioEntry[] } = { audios: [] };
     
     if (exists) {
-      const [contents] = await file.download();
-      json = JSON.parse(contents.toString());
+      try {
+        const [contents] = await file.download();
+        const contentStr = contents.toString().trim();
+        
+        // Handle empty or malformed JSON
+        if (contentStr && contentStr !== 'audios []') {
+          json = JSON.parse(contentStr);
+        }
+        
+        // Ensure json has the correct structure
+        if (!json.audios || !Array.isArray(json.audios)) {
+          json = { audios: [] };
+        }
+      } catch (parseError) {
+        console.error(`Error parsing ${fileName}, resetting to empty array:`, parseError);
+        json = { audios: [] };
+      }
     }
     
     json.audios.push(newEntry);
