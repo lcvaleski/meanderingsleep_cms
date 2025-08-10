@@ -26,6 +26,10 @@ export default function Home() {
   const [title, setTitle] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('female');
   const [topic, setTopic] = useState<'boring' | 'meandering'>('boring');
+  const [voiceName, setVoiceName] = useState('');
+  const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<string>('all');
+  const [availableVoices, setAvailableVoices] = useState<string[]>([]);
+  const [jsonData, setJsonData] = useState<any[]>([]);
 
   const fetchAudioFiles = useCallback(async () => {
     try {
@@ -33,6 +37,30 @@ export default function Home() {
       const data = await res.json();
       if (data.files) {
         setAudioFiles(data.files);
+      }
+      
+      // Fetch JSON data for History tab to get voice information
+      if (activeTab === 'history') {
+        console.log('Fetching History JSON data...');
+        try {
+          const jsonRes = await fetch(`https://storage.googleapis.com/active-audio/history-audio-list.json?t=${Date.now()}`);
+          console.log('JSON Response status:', jsonRes.status, jsonRes.ok);
+          if (jsonRes.ok) {
+            const jsonContent = await jsonRes.json();
+            console.log('JSON Content:', jsonContent);
+            if (jsonContent.audios) {
+              setJsonData(jsonContent.audios);
+              // Extract unique voice names
+              const voices = [...new Set(jsonContent.audios.map((item: any) => item.voice).filter((v: any) => v))];
+              console.log('Available voices:', voices);
+              setAvailableVoices(voices);
+            }
+          } else {
+            console.error('JSON fetch failed with status:', jsonRes.status);
+          }
+        } catch (jsonError) {
+          console.error('Error fetching JSON data:', jsonError);
+        }
       }
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -102,26 +130,78 @@ export default function Home() {
         setUploading(false);
         return;
       }
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('title', title);
-      if (activeTab === 'history') {
-        formData.append('folder', 'boringhistory');
-      } else {
-        formData.append('gender', gender);
-        formData.append('topic', topic);
+      
+      if (activeTab === 'history' && !voiceName.trim()) {
+        setError('Please enter a voice name');
+        setUploading(false);
+        return;
       }
-      const response = await fetch('/api/files/upload', {
+
+      // Step 1: Get signed URL from backend
+      const signedUrlResponse = await fetch('/api/files/signed-url', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          folder: activeTab === 'history' ? 'boringhistory' : null,
+          gender: activeTab === 'meandering' ? gender : null,
+          topic: activeTab === 'meandering' ? topic : null,
+          voiceName: activeTab === 'history' ? voiceName : null,
+        }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Upload failed');
+
+      if (!signedUrlResponse.ok) {
+        const errorData = await signedUrlResponse.json();
+        throw new Error(errorData.error || 'Failed to get upload URL');
       }
+
+      const { signedUrl, uploadPath, id } = await signedUrlResponse.json();
+      
+      // Step 2: Upload file directly to GCS using signed URL
+      setUploadProgress(30);
+      const uploadResponse = await fetch(signedUrl, {
+        method: 'PUT',
+        body: selectedFile,
+        headers: {
+          'Content-Type': 'audio/mpeg',
+          'x-goog-acl': 'public-read',
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file to storage');
+      }
+
+      // Step 3: Update JSON files
+      setUploadProgress(70);
+      const updateJsonResponse = await fetch('/api/files/update-json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id,
+          uploadPath,
+          title,
+          folder: activeTab === 'history' ? 'boringhistory' : null,
+          gender: activeTab === 'meandering' ? gender : null,
+          topic: activeTab === 'meandering' ? topic : null,
+          voiceName: activeTab === 'history' ? voiceName : null,
+        }),
+      });
+
+      if (!updateJsonResponse.ok) {
+        const errorData = await updateJsonResponse.json();
+        throw new Error(errorData.error || 'Failed to update JSON');
+      }
+
+      setUploadProgress(100);
       setUploadSuccess(true);
       setSelectedFile(null);
       setTitle('');
+      setVoiceName('');
       await fetchAudioFiles();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Upload failed');
@@ -203,6 +283,22 @@ export default function Home() {
             />
           </div>
           
+          {activeTab === 'history' && (
+            <div>
+              <label htmlFor="voiceName" className="block text-sm font-medium text-gray-700 mb-1">
+                Voice Name *
+              </label>
+              <input
+                type="text"
+                id="voiceName"
+                value={voiceName}
+                onChange={(e) => setVoiceName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. British Professor"
+              />
+            </div>
+          )}
+          
           {activeTab === 'meandering' && (
             <>
               <div>
@@ -280,7 +376,7 @@ export default function Home() {
           ) : (
             <>
               <p className="font-medium mb-1">Drag and drop an audio file here, or click to select</p>
-              <p className="text-sm text-gray-500 mb-2">MP3, WAV, M4A, OGG up to 100MB</p>
+              <p className="text-sm text-gray-500 mb-2">MP3, WAV, M4A, OGG - No size limit!</p>
               {selectedFile && (
                 <div className="mt-2 text-gray-700 text-sm">Selected: <span className="font-medium">{selectedFile.name}</span></div>
               )}
@@ -306,22 +402,61 @@ export default function Home() {
       </div>
 
       <div>
-        <h2 className="text-xl font-semibold mb-4">{activeTab === 'meandering' ? 'Meandering Sleep' : 'History Sleep'} Audio Files</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">{activeTab === 'meandering' ? 'Meandering Sleep' : 'History Sleep'} Audio Files</h2>
+          {activeTab === 'history' && availableVoices.length > 0 && (
+            console.log('Rendering filter with voices:', availableVoices),
+            <div className="flex items-center gap-2">
+              <label htmlFor="voiceFilter" className="text-sm font-medium text-gray-700">
+                Filter by voice:
+              </label>
+              <select
+                id="voiceFilter"
+                value={selectedVoiceFilter}
+                onChange={(e) => setSelectedVoiceFilter(e.target.value)}
+                className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All voices</option>
+                {availableVoices.map((voice) => (
+                  <option key={voice} value={voice}>
+                    {voice}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
         {loading ? (
           <p>Loading files...</p>
         ) : audioFiles.length === 0 ? (
           <p>No audio files found.</p>
         ) : (
           <div className="grid gap-4">
-            {audioFiles.map((file) => (
-              <div key={file.name} className="p-4 border rounded-lg">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium">{file.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {formatFileSize(file.size)} • {new Date(file.updated).toLocaleDateString()}
-                    </p>
-                  </div>
+            {audioFiles
+              .filter((file) => {
+                if (activeTab !== 'history' || selectedVoiceFilter === 'all') {
+                  return true;
+                }
+                // Find the corresponding JSON entry for this file
+                const fileId = file.name.replace('.mp3', '');
+                const jsonEntry = jsonData.find((item: any) => item.id === fileId);
+                return jsonEntry && jsonEntry.voice === selectedVoiceFilter;
+              })
+              .map((file) => {
+                // Get voice name for History files
+                const fileId = file.name.replace('.mp3', '');
+                const jsonEntry = activeTab === 'history' ? jsonData.find((item: any) => item.id === fileId) : null;
+                
+                return (
+                  <div key={file.name} className="p-4 border rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="font-medium">{file.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          {formatFileSize(file.size)} • {new Date(file.updated).toLocaleDateString()}
+                          {jsonEntry?.voice && ` • Voice: ${jsonEntry.voice}`}
+                        </p>
+                      </div>
                   <div className="flex items-center gap-4">
                     <audio controls className="w-64">
                       <source src={file.url} type={file.contentType} />
@@ -339,7 +474,8 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         )}
       </div>
