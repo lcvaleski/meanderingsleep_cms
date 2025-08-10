@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:3000", "http://localhost:3001", "https://meanderingsleep-cms.vercel.app", "*"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin", "x-goog-content-length-range"],
+    "maxAgeSeconds": 3600
+  }
+]

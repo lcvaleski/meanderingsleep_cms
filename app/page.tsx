@@ -13,6 +13,12 @@ interface AudioFile {
   url: string;
 }
 
+interface AudioEntry {
+  id: string;
+  title?: string;
+  voice?: string;
+}
+
 export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'meandering' | 'history'>('meandering');
@@ -29,7 +35,7 @@ export default function Home() {
   const [voiceName, setVoiceName] = useState('');
   const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<string>('all');
   const [availableVoices, setAvailableVoices] = useState<string[]>([]);
-  const [jsonData, setJsonData] = useState<any[]>([]);
+  const [jsonData, setJsonData] = useState<AudioEntry[]>([]);
 
   const fetchAudioFiles = useCallback(async () => {
     try {
@@ -51,7 +57,7 @@ export default function Home() {
             if (jsonContent.audios) {
               setJsonData(jsonContent.audios);
               // Extract unique voice names
-              const voices = [...new Set(jsonContent.audios.map((item: any) => item.voice).filter((v: any) => v))];
+              const voices = [...new Set(jsonContent.audios.map((item: AudioEntry) => item.voice).filter((v: string | undefined) => v))] as string[];
               console.log('Available voices:', voices);
               setAvailableVoices(voices);
             }
@@ -439,13 +445,13 @@ export default function Home() {
                 }
                 // Find the corresponding JSON entry for this file
                 const fileId = file.name.replace('.mp3', '');
-                const jsonEntry = jsonData.find((item: any) => item.id === fileId);
+                const jsonEntry = jsonData.find((item: AudioEntry) => item.id === fileId);
                 return jsonEntry && jsonEntry.voice === selectedVoiceFilter;
               })
               .map((file) => {
                 // Get voice name for History files
                 const fileId = file.name.replace('.mp3', '');
-                const jsonEntry = activeTab === 'history' ? jsonData.find((item: any) => item.id === fileId) : null;
+                const jsonEntry = activeTab === 'history' ? jsonData.find((item: AudioEntry) => item.id === fileId) : null;
                 
                 return (
                   <div key={file.name} className="p-4 border rounded-lg">
