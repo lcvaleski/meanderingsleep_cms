@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.60.0",
     "@google-cloud/storage": "^7.16.0",
     "@heroicons/react": "^2.2.0",
     "formidable": "^3.5.4",

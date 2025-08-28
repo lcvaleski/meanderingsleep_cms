@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function Login() {
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
@@ -12,67 +11,63 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // In a real app, this would be an API call
-    if (username === process.env.NEXT_PUBLIC_ADMIN_USERNAME && 
-        password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
+    if (password === 'hush') {
       localStorage.setItem('isAuthenticated', 'true');
       router.push('/');
     } else {
-      setError('Invalid credentials');
+      setError('Invalid password');
     }
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
-        <div>
-          <h2 className="text-center text-3xl font-bold text-gray-900">Meandering Sleep CMS</h2>
-          <p className="mt-2 text-center text-sm text-gray-600">Sign in to access the CMS</p>
+    <div style={{ 
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif', 
+      maxWidth: '400px', 
+      margin: '100px auto', 
+      padding: '20px' 
+    }}>
+      <h1 style={{ fontSize: '24px', marginBottom: '5px' }}>Coventry Labs CMS</h1>
+      <p style={{ marginBottom: '20px', fontSize: '14px' }}>Sign in to access the CMS</p>
+      
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>
+            Password:
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            style={{ 
+              width: '100%', 
+              padding: '5px', 
+              border: '1px solid #000',
+              fontSize: '16px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+            }}
+          />
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label htmlFor="username" className="sr-only">Username</label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                required
-                className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-lg relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
+        
+        {error && (
+          <div style={{ color: 'red', marginBottom: '15px', fontSize: '14px' }}>
+            {error}
           </div>
-
-          {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
-          )}
-
-          <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Sign in
-            </button>
-          </div>
-        </form>
-      </div>
-    </main>
+        )}
+        
+        <button
+          type="submit"
+          style={{ 
+            padding: '5px 15px', 
+            border: '1px solid #000',
+            background: '#fff',
+            cursor: 'pointer',
+            fontSize: '16px'
+          }}
+        >
+          Sign in
+        </button>
+      </form>
+    </div>
   );
-} 
+}
