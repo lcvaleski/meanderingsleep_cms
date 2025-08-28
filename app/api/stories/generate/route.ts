@@ -85,7 +85,12 @@ Provide exactly 3 subtopics, one per line.`;
 
     // Generate full 45-minute lecture
     const TARGET_WORDS = 7500; // ~45 minutes at 150 wpm
-    const parts: any[] = [];
+    const parts: Array<{
+      content: string;
+      wordCount: number;
+      partNumber: number;
+      focusArea: string;
+    }> = [];
     let totalWords = 0;
 
     console.log('API Route: Starting full generation, target words:', TARGET_WORDS);
@@ -109,12 +114,14 @@ Provide exactly 3 subtopics, one per line.`;
     });
 
     const focusAreasContent = focusAreasMessage.content[0].type === 'text' ? focusAreasMessage.content[0].text : '';
-    let focusAreas = focusAreasContent.split('\n')
+    const initialFocusAreas = focusAreasContent.split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .slice(0, 3);
     
-    console.log('API Route: Generated focus areas:', focusAreas);
+    const allFocusAreas = [...initialFocusAreas];
+    
+    console.log('API Route: Generated focus areas:', allFocusAreas);
 
     // Generate initial 3 parts with specified word counts
     const initialWordCounts = [3000, 3000, 2500];
@@ -122,7 +129,7 @@ Provide exactly 3 subtopics, one per line.`;
     for (let i = 0; i < 3; i++) {
       console.log(`API Route: Generating part ${i + 1} of 3, target words: ${initialWordCounts[i]}`);
       const userPrompt = `Generate Part ${i + 1} of a 45-minute sleep-inducing history lecture on "${topic}". 
-This section should be approximately ${initialWordCounts[i]} words and focus on ${focusAreas[i]}.
+This section should be approximately ${initialWordCounts[i]} words and focus on ${allFocusAreas[i]}.
 
 CRITICAL: Do NOT include any stage directions, asterisk actions, or descriptions of how you're speaking. No *clears throat*, *speaking slowly*, etc. Start DIRECTLY with the lecture content.
 
@@ -174,7 +181,7 @@ IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, form
         content,
         wordCount,
         partNumber: i + 1,
-        focusArea: focusAreas[i],
+        focusArea: allFocusAreas[i],
       });
       
       totalWords += wordCount;
@@ -187,7 +194,7 @@ IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, form
       
       // Generate new focus areas for additional content
       const additionalPrompt = `The lecture on "${topic}" needs more content. We've already covered:
-${focusAreas.join('\n')}
+${allFocusAreas.join('\n')}
 
 Provide 3 NEW subtopics that haven't been covered yet, one per line.`;
 
@@ -265,7 +272,7 @@ IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, form
         });
 
         totalWords += wordCount;
-        focusAreas.push(focusArea);
+        allFocusAreas.push(focusArea);
       }
     }
 
@@ -274,7 +281,7 @@ IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, form
     return NextResponse.json({
       parts,
       totalWords,
-      focusAreas,
+      focusAreas: allFocusAreas,
     });
   } catch (error) {
     console.error('API Route: Error generating story:', error);
