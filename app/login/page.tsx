@@ -46,7 +46,7 @@ function LoginForm() {
       margin: '100px auto', 
       padding: '20px' 
     }}>
-      <h1 style={{ fontSize: '24px', marginBottom: '5px' }}>Meandering Sleep CMS</h1>
+      <h1 style={{ fontSize: '24px', marginBottom: '5px' }}>Sleep CMS</h1>
       <p style={{ marginBottom: '20px', fontSize: '14px' }}>Sign in to access the CMS</p>
       
       <form onSubmit={handleSubmit}>

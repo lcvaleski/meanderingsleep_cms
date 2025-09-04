@@ -230,7 +230,7 @@ export default function Home() {
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif', maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       <div style={{ borderBottom: '1px solid #000', paddingBottom: '10px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ fontSize: '24px', margin: 0 }}>Coventry Labs CMS</h1>
+          <h1 style={{ fontSize: '24px', margin: 0 }}>Sleep CMS</h1>
           <button 
             onClick={handleLogout}
             style={{ 

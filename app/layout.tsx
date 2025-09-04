@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Meandering Sleep CMS",
-  description: "Audio file management system for Meandering Sleep",
+  title: "Sleep CMS",
+  description: "Audio file management system for sleep podcasts",
 };
 
 export default function RootLayout({

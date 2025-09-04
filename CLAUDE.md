@@ -1,4 +1,4 @@
-# Meandering Sleep CMS - Project Status
+# Sleep CMS - Project Status
 
 ## Overview
 This is a Next.js CMS for managing audio files for two sleep podcast apps:
