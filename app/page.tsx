@@ -16,6 +16,7 @@ interface AudioEntry {
   id: string;
   title?: string;
   voice?: string;
+  isNew?: boolean;
 }
 
 export default function Home() {
@@ -32,6 +33,7 @@ export default function Home() {
   const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<string>('all');
   const [availableVoices, setAvailableVoices] = useState<string[]>([]);
   const [jsonData, setJsonData] = useState<AudioEntry[]>([]);
+  const [isNew, setIsNew] = useState(false);
 
   const fetchAudioFiles = useCallback(async () => {
     try {
@@ -63,6 +65,31 @@ export default function Home() {
       setLoading(false);
     }
   }, [activeTab]);
+
+  const handleToggleNew = async (fileName: string, currentIsNew: boolean) => {
+    try {
+      const res = await fetch('/api/files/toggle-new', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName,
+          isNew: !currentIsNew,
+        }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to toggle new status');
+      }
+      
+      await fetchAudioFiles();
+    } catch (error) {
+      console.error('Error toggling new status:', error);
+      setError(error instanceof Error ? error.message : 'Failed to toggle new status');
+    }
+  };
 
   const handleDelete = async (fileName: string) => {
     if (!confirm(`Delete ${fileName}?`)) {
@@ -134,6 +161,7 @@ export default function Home() {
           gender: activeTab === 'meandering' ? gender : null,
           topic: activeTab === 'meandering' ? topic : null,
           voiceName: activeTab === 'history' ? voiceName : null,
+          isNew: activeTab === 'history' ? isNew : false,
         }),
       });
 
@@ -170,6 +198,7 @@ export default function Home() {
           gender: activeTab === 'meandering' ? gender : null,
           topic: activeTab === 'meandering' ? topic : null,
           voiceName: activeTab === 'history' ? voiceName : null,
+          isNew: activeTab === 'history' ? isNew : false,
         }),
       });
 
@@ -181,6 +210,7 @@ export default function Home() {
       setSelectedFile(null);
       setTitle('');
       setVoiceName('');
+      setIsNew(false);
       await fetchAudioFiles();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Upload failed');
@@ -274,21 +304,34 @@ export default function Home() {
             </div>
             
             {activeTab === 'history' && (
-              <div style={{ marginBottom: '10px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Voice Name:</label>
-                <input
-                  type="text"
-                  value={voiceName}
-                  onChange={(e) => setVoiceName(e.target.value)}
-                  style={{ 
-                    width: '100%', 
-                    padding: '5px', 
-                    border: '1px solid #000',
-                    fontSize: '16px',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
-                  }}
-                />
-              </div>
+              <>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Voice Name:</label>
+                  <input
+                    type="text"
+                    value={voiceName}
+                    onChange={(e) => setVoiceName(e.target.value)}
+                    style={{ 
+                      width: '100%', 
+                      padding: '5px', 
+                      border: '1px solid #000',
+                      fontSize: '16px',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>
+                    <input
+                      type="checkbox"
+                      checked={isNew}
+                      onChange={(e) => setIsNew(e.target.checked)}
+                      style={{ marginRight: '5px' }}
+                    />
+                    Mark as New
+                  </label>
+                </div>
+              </>
             )}
             
             {activeTab === 'meandering' && (
@@ -417,6 +460,7 @@ export default function Home() {
                     <th style={{ textAlign: 'left', padding: '10px 0' }}>Size</th>
                     <th style={{ textAlign: 'left', padding: '10px 0' }}>Date</th>
                     {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '10px 0' }}>Voice</th>}
+                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '10px 0' }}>New</th>}
                     <th style={{ textAlign: 'left', padding: '10px 0' }}>Audio</th>
                     {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '10px 0' }}>Actions</th>}
                   </tr>
@@ -442,6 +486,23 @@ export default function Home() {
                           <td style={{ padding: '10px 0' }}>{new Date(file.updated).toLocaleDateString()}</td>
                           {activeTab === 'history' && (
                             <td style={{ padding: '10px 0' }}>{jsonEntry?.voice || '-'}</td>
+                          )}
+                          {activeTab === 'history' && (
+                            <td style={{ padding: '10px 0' }}>
+                              <button
+                                onClick={() => handleToggleNew(file.name, jsonEntry?.isNew || false)}
+                                style={{ 
+                                  border: '1px solid #000',
+                                  background: jsonEntry?.isNew ? '#4CAF50' : '#fff',
+                                  color: jsonEntry?.isNew ? '#fff' : '#000',
+                                  padding: '2px 8px',
+                                  cursor: 'pointer',
+                                  fontSize: '14px'
+                                }}
+                              >
+                                {jsonEntry?.isNew ? 'New' : 'Not New'}
+                              </button>
+                            </td>
                           )}
                           <td style={{ padding: '10px 0' }}>
                             <audio controls style={{ height: '30px' }}>
