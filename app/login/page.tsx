@@ -1,21 +1,41 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function Login() {
+function LoginForm() {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (password === 'hush') {
-      localStorage.setItem('isAuthenticated', 'true');
-      router.push('/');
-    } else {
-      setError('Invalid password');
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await signIn('credentials', {
+        username,
+        password,
+        redirect: false,
+        callbackUrl,
+      });
+
+      if (result?.error) {
+        setError('Invalid username or password');
+        setLoading(false);
+      } else {
+        router.push(callbackUrl);
+        router.refresh();
+      }
+    } catch {
+      setError('An error occurred during login');
+      setLoading(false);
     }
   };
 
@@ -26,10 +46,30 @@ export default function Login() {
       margin: '100px auto', 
       padding: '20px' 
     }}>
-      <h1 style={{ fontSize: '24px', marginBottom: '5px' }}>Coventry Labs CMS</h1>
+      <h1 style={{ fontSize: '24px', marginBottom: '5px' }}>Meandering Sleep CMS</h1>
       <p style={{ marginBottom: '20px', fontSize: '14px' }}>Sign in to access the CMS</p>
       
       <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>
+            Username:
+          </label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            style={{ 
+              width: '100%', 
+              padding: '5px', 
+              border: '1px solid #000',
+              fontSize: '16px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+            }}
+            disabled={loading}
+          />
+        </div>
+        
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>
             Password:
@@ -46,6 +86,7 @@ export default function Login() {
               fontSize: '16px',
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
             }}
+            disabled={loading}
           />
         </div>
         
@@ -57,17 +98,26 @@ export default function Login() {
         
         <button
           type="submit"
+          disabled={loading}
           style={{ 
             padding: '5px 15px', 
             border: '1px solid #000',
-            background: '#fff',
-            cursor: 'pointer',
+            background: loading ? '#ccc' : '#fff',
+            cursor: loading ? 'default' : 'pointer',
             fontSize: '16px'
           }}
         >
-          Sign in
+          {loading ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import StoriesTab from './components/StoriesTab';
 
 interface AudioFile {
@@ -19,7 +19,6 @@ interface AudioEntry {
 }
 
 export default function Home() {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'meandering' | 'history' | 'stories'>('meandering');
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,19 +87,13 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
     if (activeTab !== 'stories') {
       fetchAudioFiles();
     }
-  }, [router, activeTab, fetchAudioFiles]);
+  }, [activeTab, fetchAudioFiles]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    router.push('/login');
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/login' });
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
