@@ -482,7 +482,14 @@ export default function Home() {
                       return (
                         <tr key={file.name} style={{ borderBottom: '1px solid #eee' }}>
                           <td style={{ padding: '10px 0' }}>
-                            {activeTab === 'history' && jsonEntry?.title ? jsonEntry.title : file.name}
+                            <div>
+                              {activeTab === 'history' && jsonEntry?.title ? jsonEntry.title : file.name}
+                              {activeTab === 'history' && (
+                                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                                  {file.url}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td style={{ padding: '10px 0' }}>{formatFileSize(file.size)}</td>
                           <td style={{ padding: '10px 0' }}>{new Date(file.updated).toLocaleDateString()}</td>
