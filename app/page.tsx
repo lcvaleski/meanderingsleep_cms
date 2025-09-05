@@ -456,7 +456,7 @@ export default function Home() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <th style={{ textAlign: 'left', padding: '10px 0' }}>Name</th>
+                    <th style={{ textAlign: 'left', padding: '10px 0' }}>{activeTab === 'history' ? 'Title' : 'Name'}</th>
                     <th style={{ textAlign: 'left', padding: '10px 0' }}>Size</th>
                     <th style={{ textAlign: 'left', padding: '10px 0' }}>Date</th>
                     {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '10px 0' }}>Voice</th>}
@@ -481,7 +481,9 @@ export default function Home() {
                       
                       return (
                         <tr key={file.name} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '10px 0' }}>{file.name}</td>
+                          <td style={{ padding: '10px 0' }}>
+                            {activeTab === 'history' && jsonEntry?.title ? jsonEntry.title : file.name}
+                          </td>
                           <td style={{ padding: '10px 0' }}>{formatFileSize(file.size)}</td>
                           <td style={{ padding: '10px 0' }}>{new Date(file.updated).toLocaleDateString()}</td>
                           {activeTab === 'history' && (
