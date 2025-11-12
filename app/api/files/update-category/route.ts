@@ -14,11 +14,12 @@ interface AudioEntry {
   title?: string;
   voice?: string;
   isNew?: boolean;
+  category?: string;
 }
 
 export async function POST(request: Request) {
   try {
-    const { fileName, isNew } = await request.json();
+    const { fileName, category } = await request.json();
     
     if (!fileName) {
       return NextResponse.json(
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       if (entryIndex !== -1) {
         json.audios[entryIndex] = {
           ...json.audios[entryIndex],
-          isNew
+          category
         };
       } else {
         return NextResponse.json(
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
       // Add categories array
       json.categories = HISTORY_CATEGORIES;
       
-      // Save updated JSON
+      // Save updated JSON with no-cache headers
       await jsonFile.save(JSON.stringify(json, null, 2), {
         metadata: {
           contentType: 'application/json',
@@ -88,8 +89,8 @@ export async function POST(request: Request) {
       await jsonFile.makePublic();
       
       return NextResponse.json({ 
-        message: 'New status updated successfully',
-        isNew 
+        message: 'Category updated successfully',
+        category 
       });
     } catch (parseError) {
       console.error('Error parsing/updating JSON:', parseError);
@@ -99,10 +100,10 @@ export async function POST(request: Request) {
       );
     }
   } catch (error) {
-    console.error('Error toggling new status:', error);
+    console.error('Error updating category:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to toggle new status',
+        error: 'Failed to update category',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }

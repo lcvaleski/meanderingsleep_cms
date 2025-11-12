@@ -3,21 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import StoriesTab from './components/StoriesTab';
-
-interface AudioFile {
-  name: string;
-  size: string;
-  contentType: string;
-  updated: string;
-  url: string;
-}
-
-interface AudioEntry {
-  id: string;
-  title?: string;
-  voice?: string;
-  isNew?: boolean;
-}
+import { AudioFile, AudioEntry, HISTORY_CATEGORIES } from './types/audio';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'meandering' | 'history' | 'stories'>('meandering');
@@ -34,6 +20,10 @@ export default function Home() {
   const [availableVoices, setAvailableVoices] = useState<string[]>([]);
   const [jsonData, setJsonData] = useState<AudioEntry[]>([]);
   const [isNew, setIsNew] = useState(false);
+  const [category, setCategory] = useState<string>('');
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editingImage, setEditingImage] = useState<string | null>(null);
+  const [tempImageUrl, setTempImageUrl] = useState<string>('');
 
   const fetchAudioFiles = useCallback(async () => {
     try {
@@ -88,6 +78,59 @@ export default function Home() {
     } catch (error) {
       console.error('Error toggling new status:', error);
       setError(error instanceof Error ? error.message : 'Failed to toggle new status');
+    }
+  };
+
+  const handleCategoryUpdate = async (fileName: string, newCategory: string) => {
+    try {
+      const res = await fetch('/api/files/update-category', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName,
+          category: newCategory,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update category');
+      }
+
+      setEditingCategory(null);
+      await fetchAudioFiles();
+    } catch (error) {
+      console.error('Error updating category:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update category');
+    }
+  };
+
+  const handleImageUpdate = async (fileName: string, newImageUrl: string) => {
+    try {
+      const res = await fetch('/api/files/update-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName,
+          imageUrl: newImageUrl,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update image URL');
+      }
+
+      setEditingImage(null);
+      setTempImageUrl('');
+      await fetchAudioFiles();
+    } catch (error) {
+      console.error('Error updating image URL:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update image URL');
     }
   };
 
@@ -162,6 +205,7 @@ export default function Home() {
           topic: activeTab === 'meandering' ? topic : null,
           voiceName: activeTab === 'history' ? voiceName : null,
           isNew: activeTab === 'history' ? isNew : false,
+          category: activeTab === 'history' ? category : null,
         }),
       });
 
@@ -199,6 +243,7 @@ export default function Home() {
           topic: activeTab === 'meandering' ? topic : null,
           voiceName: activeTab === 'history' ? voiceName : null,
           isNew: activeTab === 'history' ? isNew : false,
+          category: activeTab === 'history' ? category : null,
         }),
       });
 
@@ -211,6 +256,7 @@ export default function Home() {
       setTitle('');
       setVoiceName('');
       setIsNew(false);
+      setCategory('');
       await fetchAudioFiles();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Upload failed');
@@ -219,12 +265,6 @@ export default function Home() {
     }
   };
 
-  const formatFileSize = (bytes: string) => {
-    const size = parseInt(bytes);
-    if (size < 1024) return `${size} B`;
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif', maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
@@ -319,6 +359,27 @@ export default function Home() {
                       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
                     }}
                   />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    style={{ 
+                      width: '100%', 
+                      padding: '5px', 
+                      border: '1px solid #000',
+                      fontSize: '16px',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                    }}
+                  >
+                    <option value="">Select a category</option>
+                    {HISTORY_CATEGORIES.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={{ display: 'block', marginBottom: '5px' }}>
@@ -456,13 +517,14 @@ export default function Home() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <th style={{ textAlign: 'left', padding: '10px 0' }}>{activeTab === 'history' ? 'Title' : 'Name'}</th>
-                    <th style={{ textAlign: 'left', padding: '10px 0' }}>Size</th>
-                    <th style={{ textAlign: 'left', padding: '10px 0' }}>Date</th>
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '10px 0' }}>Voice</th>}
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '10px 0' }}>New</th>}
-                    <th style={{ textAlign: 'left', padding: '10px 0' }}>Audio</th>
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '10px 0' }}>Actions</th>}
+                    <th style={{ textAlign: 'left', padding: '12px 8px 12px 0' }}>{activeTab === 'history' ? 'Title' : 'Name'}</th>
+                    <th style={{ textAlign: 'left', padding: '12px 8px' }}>Date</th>
+                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>Voice</th>}
+                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>Category</th>}
+                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>Image</th>}
+                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>New</th>}
+                    <th style={{ textAlign: 'left', padding: '12px 8px' }}>Audio</th>
+                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px 12px 8px' }}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -481,7 +543,7 @@ export default function Home() {
                       
                       return (
                         <tr key={file.name} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '10px 0' }}>
+                          <td style={{ padding: '12px 8px 12px 0' }}>
                             <div>
                               {activeTab === 'history' && jsonEntry?.title ? jsonEntry.title : file.name}
                               {activeTab === 'history' && (
@@ -491,13 +553,147 @@ export default function Home() {
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '10px 0' }}>{formatFileSize(file.size)}</td>
-                          <td style={{ padding: '10px 0' }}>{new Date(file.updated).toLocaleDateString()}</td>
+                          <td style={{ padding: '12px 8px' }}>{new Date(file.updated).toLocaleDateString()}</td>
                           {activeTab === 'history' && (
-                            <td style={{ padding: '10px 0' }}>{jsonEntry?.voice || '-'}</td>
+                            <td style={{ padding: '12px 8px' }}>{jsonEntry?.voice || '-'}</td>
                           )}
                           {activeTab === 'history' && (
-                            <td style={{ padding: '10px 0' }}>
+                            <td style={{ padding: '12px 8px' }}>
+                              {editingCategory === file.name ? (
+                                <select
+                                  autoFocus
+                                  defaultValue={jsonEntry?.category || ''}
+                                  onBlur={(e) => {
+                                    if (e.target.value !== (jsonEntry?.category || '')) {
+                                      handleCategoryUpdate(file.name, e.target.value);
+                                    } else {
+                                      setEditingCategory(null);
+                                    }
+                                  }}
+                                  onChange={(e) => {
+                                    if (e.target.value !== (jsonEntry?.category || '')) {
+                                      handleCategoryUpdate(file.name, e.target.value);
+                                    }
+                                  }}
+                                  style={{ 
+                                    padding: '2px', 
+                                    border: '1px solid #000',
+                                    fontSize: '14px',
+                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                                  }}
+                                >
+                                  <option value="">No category</option>
+                                  {HISTORY_CATEGORIES.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>
+                                      {cat.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <div 
+                                  onClick={() => setEditingCategory(file.name)}
+                                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                                >
+                                  {jsonEntry?.category ? HISTORY_CATEGORIES.find(c => c.id === jsonEntry.category)?.name || 'No category' : 'No category'}
+                                </div>
+                              )}
+                            </td>
+                          )}
+                          {activeTab === 'history' && (
+                            <td style={{ padding: '12px 8px' }}>
+                              {editingImage === file.name ? (
+                                <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    defaultValue={jsonEntry?.imageUrl || ''}
+                                    onChange={(e) => setTempImageUrl(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleImageUpdate(file.name, tempImageUrl || (e.target as HTMLInputElement).value);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingImage(null);
+                                        setTempImageUrl('');
+                                      }
+                                    }}
+                                    placeholder="GCS image URL"
+                                    style={{
+                                      padding: '2px 4px',
+                                      border: '1px solid #000',
+                                      fontSize: '12px',
+                                      width: '200px',
+                                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleImageUpdate(file.name, tempImageUrl || document.querySelector<HTMLInputElement>('input[type="text"][placeholder="GCS image URL"]')?.value || '')}
+                                    style={{
+                                      padding: '2px 6px',
+                                      border: '1px solid #000',
+                                      background: '#fff',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingImage(null);
+                                      setTempImageUrl('');
+                                    }}
+                                    style={{
+                                      padding: '2px 6px',
+                                      border: '1px solid #000',
+                                      background: '#fff',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div
+                                  onClick={() => {
+                                    setEditingImage(file.name);
+                                    setTempImageUrl(jsonEntry?.imageUrl || '');
+                                  }}
+                                  style={{
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                  }}
+                                >
+                                  {jsonEntry?.imageUrl ? (
+                                    <>
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={jsonEntry.imageUrl}
+                                        alt=""
+                                        style={{
+                                          width: '30px',
+                                          height: '30px',
+                                          objectFit: 'cover',
+                                          border: '1px solid #ccc'
+                                        }}
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                      <span style={{ fontSize: '12px', color: '#666' }}>Edit</span>
+                                    </>
+                                  ) : (
+                                    <span style={{ fontSize: '12px', color: '#999' }}>Add image</span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          )}
+                          {activeTab === 'history' && (
+                            <td style={{ padding: '12px 8px' }}>
                               <button
                                 onClick={() => handleToggleNew(file.name, jsonEntry?.isNew || false)}
                                 style={{ 
@@ -513,13 +709,13 @@ export default function Home() {
                               </button>
                             </td>
                           )}
-                          <td style={{ padding: '10px 0' }}>
+                          <td style={{ padding: '12px 8px' }}>
                             <audio controls style={{ height: '30px' }}>
                               <source src={file.url} type={file.contentType} />
                             </audio>
                           </td>
                           {activeTab === 'history' && (
-                            <td style={{ padding: '10px 0' }}>
+                            <td style={{ padding: '12px 8px' }}>
                               <button
                                 onClick={() => handleDelete(file.name)}
                                 style={{ 

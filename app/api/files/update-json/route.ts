@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Storage } from '@google-cloud/storage';
+import { HISTORY_CATEGORIES } from '@/app/types/audio';
 
 const storage = new Storage({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
@@ -16,6 +17,8 @@ interface AudioEntry {
   gender?: string;
   voice?: string;
   isNew?: boolean;
+  category?: string;
+  imageUrl?: string;
 }
 
 async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileName: string, newEntry: AudioEntry) {
@@ -23,7 +26,7 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
     const file = bucket.file(fileName);
     const [exists] = await file.exists();
     
-    let json: { audios: AudioEntry[] } = { audios: [] };
+    let json: { audios: AudioEntry[], categories?: typeof HISTORY_CATEGORIES } = { audios: [] };
     
     if (exists) {
       try {
@@ -47,9 +50,15 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
     
     json.audios.push(newEntry);
     
+    // Add categories to history JSON
+    if (fileName === 'history-audio-list.json') {
+      json.categories = HISTORY_CATEGORIES;
+    }
+    
     await file.save(JSON.stringify(json, null, 2), {
       metadata: {
         contentType: 'application/json',
+        cacheControl: 'no-cache, no-store, must-revalidate',
       },
     });
     
@@ -64,7 +73,7 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { folder, title, gender, topic, id, uploadPath, voiceName, isNew } = body;
+    const { folder, title, gender, topic, id, uploadPath, voiceName, isNew, category, imageUrl } = body;
 
     if (!id || !uploadPath) {
       return NextResponse.json(
@@ -89,7 +98,9 @@ export async function POST(request: Request) {
         id: id,
         title: title,
         voice: voiceName || 'Unknown',
-        ...(isNew !== undefined && { isNew })
+        ...(isNew !== undefined && { isNew }),
+        ...(category && { category }),
+        ...(imageUrl && { imageUrl })
       };
       jsonFileName = 'history-audio-list.json';
     } else {
