@@ -285,8 +285,20 @@ IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, form
     });
   } catch (error) {
     console.error('API Route: Error generating story:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      error: error
+    });
+
+    // Return more detailed error for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
-      { error: 'Failed to generate story' },
+      {
+        error: 'Failed to generate story',
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
