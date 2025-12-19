@@ -40,7 +40,7 @@ Generate 20 NEW topics similar to these examples. Focus on:
 Provide exactly 20 topics, one per line, no numbering or bullets. Make them diverse across different time periods and cultures.`;
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1000,
       temperature: 0.8,
       messages: [

@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 Provide exactly 3 subtopics, one per line.`;
 
       const message = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 300,
         temperature: 0.7,
         messages: [
@@ -102,7 +102,7 @@ Provide exactly 3 subtopics, one per line.`;
 
     console.log('API Route: Generating focus areas...');
     const focusAreasMessage = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 300,
       temperature: 0.7,
       messages: [
@@ -153,7 +153,7 @@ Write in a drowsy, meandering style that includes:
 IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, formatting, or stage directions. Start immediately with lecture content - don't describe your tone or manner of speaking.`;
 
       const message = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 4000,
         temperature: 0.7,
         system: SYSTEM_PROMPT,
@@ -200,7 +200,7 @@ Provide 3 NEW subtopics that haven't been covered yet, one per line.`;
 
       console.log('API Route: Generating additional focus areas...');
       const additionalMessage = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 300,
         temperature: 0.7,
         messages: [
@@ -249,7 +249,7 @@ Write in a drowsy, meandering style that includes:
 IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, formatting, or stage directions. Start immediately with lecture content - don't describe your tone or manner of speaking.`;
 
         const message = await anthropic.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-sonnet-4-5-20250929',
           max_tokens: 4000,
           temperature: 0.7,
           system: SYSTEM_PROMPT,
