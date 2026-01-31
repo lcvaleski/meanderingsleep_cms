@@ -6,15 +6,13 @@ import StoriesTab from './components/StoriesTab';
 import { AudioFile, AudioEntry, HISTORY_CATEGORIES } from './types/audio';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'meandering' | 'history' | 'stories'>('meandering');
+  const [activeTab, setActiveTab] = useState<'history' | 'stories'>('history');
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
-  const [gender, setGender] = useState<'male' | 'female'>('female');
-  const [topic, setTopic] = useState<'boring' | 'meandering'>('boring');
   const [voiceName, setVoiceName] = useState('');
   const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<string>('all');
   const [availableVoices, setAvailableVoices] = useState<string[]>([]);
@@ -27,26 +25,24 @@ export default function Home() {
 
   const fetchAudioFiles = useCallback(async () => {
     try {
-      const res = await fetch(`/api/files?folder=${activeTab === 'history' ? 'boringhistory' : ''}`);
+      const res = await fetch('/api/files?folder=boringhistory');
       const data = await res.json();
       if (data.files) {
         setAudioFiles(data.files);
       }
-      
-      if (activeTab === 'history') {
-        try {
-          const jsonRes = await fetch(`https://storage.googleapis.com/active-audio/history-audio-list.json?t=${Date.now()}`);
-          if (jsonRes.ok) {
-            const jsonContent = await jsonRes.json();
-            if (jsonContent.audios) {
-              setJsonData(jsonContent.audios);
-              const voices = [...new Set(jsonContent.audios.map((item: AudioEntry) => item.voice).filter((v: string | undefined) => v))] as string[];
-              setAvailableVoices(voices);
-            }
+
+      try {
+        const jsonRes = await fetch(`https://storage.googleapis.com/active-audio/history-audio-list.json?t=${Date.now()}`);
+        if (jsonRes.ok) {
+          const jsonContent = await jsonRes.json();
+          if (jsonContent.audios) {
+            setJsonData(jsonContent.audios);
+            const voices = [...new Set(jsonContent.audios.map((item: AudioEntry) => item.voice).filter((v: string | undefined) => v))] as string[];
+            setAvailableVoices(voices);
           }
-        } catch (jsonError) {
-          console.error('Error fetching JSON data:', jsonError);
         }
+      } catch (jsonError) {
+        console.error('Error fetching JSON data:', jsonError);
       }
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -54,7 +50,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, []);
 
   const handleToggleNew = async (fileName: string, currentIsNew: boolean) => {
     try {
@@ -187,7 +183,7 @@ export default function Home() {
         return;
       }
       
-      if (activeTab === 'history' && !voiceName.trim()) {
+      if (!voiceName.trim()) {
         setError('Voice name required');
         setUploading(false);
         return;
@@ -200,12 +196,10 @@ export default function Home() {
         },
         body: JSON.stringify({
           title,
-          folder: activeTab === 'history' ? 'boringhistory' : null,
-          gender: activeTab === 'meandering' ? gender : null,
-          topic: activeTab === 'meandering' ? topic : null,
-          voiceName: activeTab === 'history' ? voiceName : null,
-          isNew: activeTab === 'history' ? isNew : false,
-          category: activeTab === 'history' ? category : null,
+          folder: 'boringhistory',
+          voiceName,
+          isNew,
+          category,
         }),
       });
 
@@ -215,7 +209,7 @@ export default function Home() {
       }
 
       const { signedUrl, uploadPath, id } = await signedUrlResponse.json();
-      
+
       const uploadResponse = await fetch(signedUrl, {
         method: 'PUT',
         body: selectedFile,
@@ -238,12 +232,10 @@ export default function Home() {
           id,
           uploadPath,
           title,
-          folder: activeTab === 'history' ? 'boringhistory' : null,
-          gender: activeTab === 'meandering' ? gender : null,
-          topic: activeTab === 'meandering' ? topic : null,
-          voiceName: activeTab === 'history' ? voiceName : null,
-          isNew: activeTab === 'history' ? isNew : false,
-          category: activeTab === 'history' ? category : null,
+          folder: 'boringhistory',
+          voiceName,
+          isNew,
+          category,
         }),
       });
 
@@ -285,32 +277,21 @@ export default function Home() {
           </button>
         </div>
         <div style={{ marginTop: '15px' }}>
-          <a 
-            href="#" 
-            onClick={(e) => { e.preventDefault(); setActiveTab('meandering'); }}
-            style={{ 
-              marginRight: '20px', 
-              textDecoration: activeTab === 'meandering' ? 'underline' : 'none',
-              color: '#000'
-            }}
-          >
-            Meandering Sleep
-          </a>
-          <a 
-            href="#" 
+          <a
+            href="#"
             onClick={(e) => { e.preventDefault(); setActiveTab('history'); }}
-            style={{ 
-              marginRight: '20px', 
+            style={{
+              marginRight: '20px',
               textDecoration: activeTab === 'history' ? 'underline' : 'none',
               color: '#000'
             }}
           >
             History Sleep
           </a>
-          <a 
-            href="#" 
+          <a
+            href="#"
             onClick={(e) => { e.preventDefault(); setActiveTab('stories'); }}
-            style={{ 
+            style={{
               textDecoration: activeTab === 'stories' ? 'underline' : 'none',
               color: '#000'
             }}
@@ -343,105 +324,53 @@ export default function Home() {
               />
             </div>
             
-            {activeTab === 'history' && (
-              <>
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px' }}>Voice Name:</label>
-                  <input
-                    type="text"
-                    value={voiceName}
-                    onChange={(e) => setVoiceName(e.target.value)}
-                    style={{ 
-                      width: '100%', 
-                      padding: '5px', 
-                      border: '1px solid #000',
-                      fontSize: '16px',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
-                    }}
-                  />
-                </div>
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    style={{ 
-                      width: '100%', 
-                      padding: '5px', 
-                      border: '1px solid #000',
-                      fontSize: '16px',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
-                    }}
-                  >
-                    <option value="">Select a category</option>
-                    {HISTORY_CATEGORIES.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px' }}>
-                    <input
-                      type="checkbox"
-                      checked={isNew}
-                      onChange={(e) => setIsNew(e.target.checked)}
-                      style={{ marginRight: '5px' }}
-                    />
-                    Mark as New
-                  </label>
-                </div>
-              </>
-            )}
-            
-            {activeTab === 'meandering' && (
-              <>
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px' }}>Topic:</label>
-                  <select
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value as 'boring' | 'meandering')}
-                    style={{ 
-                      width: '100%', 
-                      padding: '5px', 
-                      border: '1px solid #000',
-                      fontSize: '16px',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
-                    }}
-                  >
-                    <option value="boring">Boring</option>
-                    <option value="meandering">Meandering</option>
-                  </select>
-                </div>
-                
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px' }}>Gender:</label>
-                  <div>
-                    <label style={{ marginRight: '20px' }}>
-                      <input
-                        type="radio"
-                        value="female"
-                        checked={gender === 'female'}
-                        onChange={(e) => setGender(e.target.value as 'male' | 'female')}
-                        style={{ marginRight: '5px' }}
-                      />
-                      Female
-                    </label>
-                    <label>
-                      <input
-                        type="radio"
-                        value="male"
-                        checked={gender === 'male'}
-                        onChange={(e) => setGender(e.target.value as 'male' | 'female')}
-                        style={{ marginRight: '5px' }}
-                      />
-                      Male
-                    </label>
-                  </div>
-                </div>
-              </>
-            )}
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>Voice Name:</label>
+              <input
+                type="text"
+                value={voiceName}
+                onChange={(e) => setVoiceName(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '5px',
+                  border: '1px solid #000',
+                  fontSize: '16px',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '5px',
+                  border: '1px solid #000',
+                  fontSize: '16px',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                }}
+              >
+                <option value="">Select a category</option>
+                {HISTORY_CATEGORIES.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>
+                <input
+                  type="checkbox"
+                  checked={isNew}
+                  onChange={(e) => setIsNew(e.target.checked)}
+                  style={{ marginRight: '5px' }}
+                />
+                Mark as New
+              </label>
+            </div>
             
             <div style={{ marginBottom: '10px' }}>
               <label style={{ display: 'block', marginBottom: '5px' }}>Audio File:</label>
@@ -483,10 +412,10 @@ export default function Home() {
 
           <div>
             <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>
-              {activeTab === 'meandering' ? 'Meandering Sleep' : 'History Sleep'} Files
+              History Sleep Files
             </h2>
-            
-            {activeTab === 'history' && availableVoices.length > 0 && (
+
+            {availableVoices.length > 0 && (
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ marginRight: '10px' }}>Filter by voice:</label>
                 <select
@@ -517,20 +446,20 @@ export default function Home() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <th style={{ textAlign: 'left', padding: '12px 8px 12px 0' }}>{activeTab === 'history' ? 'Title' : 'Name'}</th>
+                    <th style={{ textAlign: 'left', padding: '12px 8px 12px 0' }}>Title</th>
                     <th style={{ textAlign: 'left', padding: '12px 8px' }}>Date</th>
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>Voice</th>}
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>Category</th>}
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>Image</th>}
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px' }}>New</th>}
+                    <th style={{ textAlign: 'left', padding: '12px 8px' }}>Voice</th>
+                    <th style={{ textAlign: 'left', padding: '12px 8px' }}>Category</th>
+                    <th style={{ textAlign: 'left', padding: '12px 8px' }}>Image</th>
+                    <th style={{ textAlign: 'left', padding: '12px 8px' }}>New</th>
                     <th style={{ textAlign: 'left', padding: '12px 8px' }}>Audio</th>
-                    {activeTab === 'history' && <th style={{ textAlign: 'left', padding: '12px 8px 12px 8px' }}>Actions</th>}
+                    <th style={{ textAlign: 'left', padding: '12px 8px 12px 8px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {audioFiles
                     .filter((file) => {
-                      if (activeTab !== 'history' || selectedVoiceFilter === 'all') {
+                      if (selectedVoiceFilter === 'all') {
                         return true;
                       }
                       const fileId = file.name.replace('.mp3', '');
@@ -539,26 +468,21 @@ export default function Home() {
                     })
                     .map((file) => {
                       const fileId = file.name.replace('.mp3', '');
-                      const jsonEntry = activeTab === 'history' ? jsonData.find((item: AudioEntry) => item.id === fileId) : null;
+                      const jsonEntry = jsonData.find((item: AudioEntry) => item.id === fileId);
                       
                       return (
                         <tr key={file.name} style={{ borderBottom: '1px solid #eee' }}>
                           <td style={{ padding: '12px 8px 12px 0' }}>
                             <div>
-                              {activeTab === 'history' && jsonEntry?.title ? jsonEntry.title : file.name}
-                              {activeTab === 'history' && (
-                                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                                  {file.url}
-                                </div>
-                              )}
+                              {jsonEntry?.title || file.name}
+                              <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                                {file.url}
+                              </div>
                             </div>
                           </td>
                           <td style={{ padding: '12px 8px' }}>{new Date(file.updated).toLocaleDateString()}</td>
-                          {activeTab === 'history' && (
-                            <td style={{ padding: '12px 8px' }}>{jsonEntry?.voice || '-'}</td>
-                          )}
-                          {activeTab === 'history' && (
-                            <td style={{ padding: '12px 8px' }}>
+                          <td style={{ padding: '12px 8px' }}>{jsonEntry?.voice || '-'}</td>
+                          <td style={{ padding: '12px 8px' }}>
                               {editingCategory === file.name ? (
                                 <select
                                   autoFocus
@@ -598,10 +522,8 @@ export default function Home() {
                                 </div>
                               )}
                             </td>
-                          )}
-                          {activeTab === 'history' && (
-                            <td style={{ padding: '12px 8px' }}>
-                              {editingImage === file.name ? (
+                          <td style={{ padding: '12px 8px' }}>
+                            {editingImage === file.name ? (
                                 <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                                   <input
                                     type="text"
@@ -691,45 +613,40 @@ export default function Home() {
                                 </div>
                               )}
                             </td>
-                          )}
-                          {activeTab === 'history' && (
-                            <td style={{ padding: '12px 8px' }}>
-                              <button
-                                onClick={() => handleToggleNew(file.name, jsonEntry?.isNew || false)}
-                                style={{ 
-                                  border: '1px solid #000',
-                                  background: jsonEntry?.isNew ? '#4CAF50' : '#fff',
-                                  color: jsonEntry?.isNew ? '#fff' : '#000',
-                                  padding: '2px 8px',
-                                  cursor: 'pointer',
-                                  fontSize: '14px'
-                                }}
-                              >
-                                {jsonEntry?.isNew ? 'New' : 'Not New'}
-                              </button>
-                            </td>
-                          )}
+                          <td style={{ padding: '12px 8px' }}>
+                            <button
+                              onClick={() => handleToggleNew(file.name, jsonEntry?.isNew || false)}
+                              style={{
+                                border: '1px solid #000',
+                                background: jsonEntry?.isNew ? '#4CAF50' : '#fff',
+                                color: jsonEntry?.isNew ? '#fff' : '#000',
+                                padding: '2px 8px',
+                                cursor: 'pointer',
+                                fontSize: '14px'
+                              }}
+                            >
+                              {jsonEntry?.isNew ? 'New' : 'Not New'}
+                            </button>
+                          </td>
                           <td style={{ padding: '12px 8px' }}>
                             <audio controls style={{ height: '30px' }}>
                               <source src={file.url} type={file.contentType} />
                             </audio>
                           </td>
-                          {activeTab === 'history' && (
-                            <td style={{ padding: '12px 8px' }}>
-                              <button
-                                onClick={() => handleDelete(file.name)}
-                                style={{ 
-                                  border: '1px solid #000',
-                                  background: '#fff',
-                                  padding: '2px 8px',
-                                  cursor: 'pointer',
-                                  fontSize: '14px'
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </td>
-                          )}
+                          <td style={{ padding: '12px 8px' }}>
+                            <button
+                              onClick={() => handleDelete(file.name)}
+                              style={{
+                                border: '1px solid #000',
+                                background: '#fff',
+                                padding: '2px 8px',
+                                cursor: 'pointer',
+                                fontSize: '14px'
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
