@@ -113,14 +113,24 @@ export default function StoriesTab() {
       });
 
       console.log('API response status:', res.status);
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error('API error response:', errorData);
-        throw new Error(errorData.error || 'Failed to generate story');
+
+      const responseText = await res.text();
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        console.error('Failed to parse response. Status:', res.status, 'Body preview:', responseText.slice(0, 500));
+        throw new Error(
+          res.status === 504 ? 'Generation timed out. Try a simpler topic or try again.' :
+          `Server returned non-JSON response (status ${res.status})`
+        );
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        console.error('API error response:', data);
+        throw new Error(data.error || 'Failed to generate story');
+      }
       console.log('Story generated successfully. Parts:', data.parts?.length, 'Total words:', data.totalWords);
       
       isStillGenerating = false;

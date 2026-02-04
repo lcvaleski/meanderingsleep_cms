@@ -15,7 +15,7 @@ const CONFIG = {
   },
   maxTokens: {
     outline: 2000,
-    content: 8192,
+    content: 5000,
     summary: 500,
   },
   targetWords: 7500,
