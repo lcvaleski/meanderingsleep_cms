@@ -1,43 +1,135 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
-const SYSTEM_PROMPT = `You are a drowsy history professor giving a detailed bedtime lecture. Your style should induce sleep while remaining somewhat engaging.
+export const maxDuration = 300; // 5 minutes max for Vercel Pro
 
-CRITICAL RULES: 
-1. ABSOLUTELY NO stage directions, asterisk actions, or narration about yourself. DO NOT write things like *clears throat*, *adjusts glasses*, *speaking slowly*, or any other action descriptions.
-2. ABSOLUTELY NO META-TEXT OR CONTINUATION MARKERS. Never write [Continued in next section], [To be continued], [End of Part 1], or any brackets with editorial/continuation information.
-3. Start directly with the lecture content and flow naturally throughout.
+const CONFIG = {
+  models: {
+    content: 'claude-sonnet-4-5-20250929',
+    utility: 'claude-3-5-haiku-20241022',
+  },
+  temperature: {
+    outline: 0.6,
+    content: 0.5,
+    utility: 0.7,
+  },
+  maxTokens: {
+    outline: 2000,
+    content: 8192,
+    summary: 500,
+  },
+  targetWords: 7500,
+  chunkWordTargets: [2500, 2500, 2500],
+  maxParagraphWords: 150,
+};
 
-TONE & STYLE:
-- Speak in a calm, monotonous drone like David Attenborough at 2 AM
-- Mix simple explanations with occasional academic terminology
-- Include interesting facts but deliver them matter-of-factly
-- Meander through topics with gentle, sleepy transitions
-- Sound like you find everything mildly fascinating but can't quite muster enthusiasm
-- Include some surprising historical details but present them boringly
+const SYSTEM_PROMPT = `You are a drowsy history professor giving a detailed bedtime lecture. Your style should induce sleep while remaining mildly engaging — never so boring that it is unpleasant, never so interesting that it keeps the listener awake.
 
-CONTENT REQUIREMENTS:
-- Include dates and times but don't overdo the precision
-- Mix mundane daily life details with occasional interesting events
-- Describe processes and procedures in soothing detail
-- Add tangential stories about random historical figures
-- Include both boring and fascinating facts, all delivered the same way
-- Focus heavily on routines, regulations, and everyday life
-- Occasionally mention something dramatic but immediately move on
+CRITICAL RULES:
+1. NO stage directions, asterisk actions, or narration about yourself.
+2. NO meta-text: never write [Continued], [End of Part], or any bracketed editorial text.
+3. Start directly with lecture content. No introductions about your speaking style.
+
+TONE — match this reference paragraph exactly:
+"The Romans, as it happens, were rather particular about their bread. The standard loaf in the second century weighed roughly two pounds, though of course this varied somewhat depending on the region and, well, the general mood of the baker. In Pompeii alone there were something like thirty-three bakeries, each one turning out loaves from before dawn until they were done, really. The flour was ground using rotary mills, which were typically powered by donkeys, and the process of grinding was, if one thinks about it, remarkably similar across most of the Mediterranean. A man named Terentius Neo, who we know about only because his bakery sign survived the eruption, apparently specialized in a round loaf with eight scored sections, each one designed to break off easily, though whether anyone particularly cared about that at the time is anyone's guess."
+
+ANTI-ENGAGEMENT RULES:
+- Never use exclamation marks.
+- Never use: incredible, amazing, fascinating, remarkable, extraordinary, astonishing, thrilling, stunning, breathtaking, mind-blowing.
+- When mentioning a dramatic event, immediately follow it with a mundane detail.
+- Never build suspense or use cliffhanger phrasing.
+- Never ask rhetorical questions.
+- Treat every fact with the same mild, drowsy interest.
+- Preferred transitions: "and speaking of which", "which reminds one", "incidentally", "as it happens", "in any case", "one might also note", "though of course".
+
+AUDIO FORMATTING (this text will be read aloud by text-to-speech):
+- Keep paragraphs under one hundred and fifty words.
+- Use ellipses (...) for trailing-off pauses between thoughts.
+- Use em dashes for parenthetical pauses.
+- Prefer sentences of fifteen to twenty-five words.
+- Spell out ALL numbers as words: "fourteen twenty-three" not "1423", "roughly two hundred" not "~200".
+- Spell out abbreviations: "approximately" not "approx.", "Doctor" not "Dr."
+- No parenthetical text — rewrite as separate sentences.
+- End sentences with periods. Never exclamation marks.
+
+CONTENT:
+- Include dates and times, always spelled out as words.
+- Mix mundane daily life details with occasional mildly interesting facts, all delivered the same way.
+- Describe processes and procedures in soothing detail.
+- Add tangential stories about historical figures delivered boringly.
+- Occasionally mention something dramatic but immediately move on to something mundane.
+- Focus on routines, regulations, and everyday life.
 
 STRUCTURE:
-- Write in long, flowing paragraphs that gently drift between topics
-- No lists or bullet points - everything flows together
-- Take scenic routes to get to any point
-- Sound like a sleepy museum audio guide
-- Let sentences run on a bit too long sometimes
-- Mix the mundane with the mildly interesting throughout
-- Start IMMEDIATELY with lecture content - no introductions about tone or speaking style`;
+- Long, flowing paragraphs that gently drift between related ideas.
+- No lists, bullet points, or formatting.
+- Let sentences run on a bit too long sometimes.
+- Take scenic routes to get to any point.`;
+
+function getTextContent(message: Anthropic.Message): string {
+  return message.content[0].type === 'text' ? message.content[0].text : '';
+}
+
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(w => w.length > 0).length;
+}
+
+function getLastSentences(text: string, count: number): string {
+  const sentences = text.match(/[^.!?]+[.!?]+/g);
+  if (!sentences) return text.slice(-300);
+  return sentences.slice(-count).join('').trim();
+}
+
+function postProcess(content: string): string {
+  // Strip meta-text markers
+  content = content.replace(/\[.*?\]/g, '');
+
+  // Strip asterisk actions
+  content = content.replace(/\*[^*]+\*/g, '');
+
+  // Remove exclamation marks (replace with periods)
+  content = content.replace(/!/g, '.');
+
+  // Split oversized paragraphs at sentence boundaries
+  content = splitLongParagraphs(content, CONFIG.maxParagraphWords);
+
+  return content.trim();
+}
+
+function splitLongParagraphs(text: string, maxWords: number): string {
+  const paragraphs = text.split(/\n\n+/);
+  const result: string[] = [];
+
+  for (const para of paragraphs) {
+    const words = para.split(/\s+/);
+    if (words.length <= maxWords) {
+      result.push(para);
+      continue;
+    }
+    const sentences = para.match(/[^.!?]+[.!?]+/g) || [para];
+    let current = '';
+    let currentWords = 0;
+    for (const sentence of sentences) {
+      const sentenceWords = sentence.trim().split(/\s+/).length;
+      if (currentWords + sentenceWords > maxWords && current) {
+        result.push(current.trim());
+        current = sentence;
+        currentWords = sentenceWords;
+      } else {
+        current += sentence;
+        currentWords += sentenceWords;
+      }
+    }
+    if (current.trim()) result.push(current.trim());
+  }
+
+  return result.join('\n\n');
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { topic, generateFull = false } = await req.json();
-    
+
     console.log('API Route: Received request for topic:', topic, 'generateFull:', generateFull);
 
     if (!topic) {
@@ -49,32 +141,25 @@ export async function POST(req: NextRequest) {
       console.error('API Route: No ANTHROPIC_API_KEY found');
       return NextResponse.json({ error: 'Anthropic API key not configured' }, { status: 500 });
     }
-    
-    console.log('API Route: API key found, length:', anthropicKey.length);
 
     const anthropic = new Anthropic({
       apiKey: anthropicKey,
     });
 
-    // If generating focus areas only
+    // If generating focus areas only (legacy path)
     if (!generateFull) {
       const prompt = `Divide the topic "${topic}" into 3 distinct subtopics for a boring history lecture. Each subtopic should be different but related to the main topic.
 
 Provide exactly 3 subtopics, one per line.`;
 
       const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
+        model: CONFIG.models.utility,
         max_tokens: 300,
-        temperature: 0.7,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+        temperature: CONFIG.temperature.utility,
+        messages: [{ role: 'user', content: prompt }],
       });
 
-      const content = message.content[0].type === 'text' ? message.content[0].text : '';
+      const content = getTextContent(message);
       const focusAreas = content.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0)
@@ -83,8 +168,7 @@ Provide exactly 3 subtopics, one per line.`;
       return NextResponse.json({ focusAreas });
     }
 
-    // Generate full 45-minute lecture
-    const TARGET_WORDS = 7500; // ~45 minutes at 150 wpm
+    // === Full generation pipeline ===
     const parts: Array<{
       content: string;
       wordCount: number;
@@ -92,192 +176,258 @@ Provide exactly 3 subtopics, one per line.`;
       focusArea: string;
     }> = [];
     let totalWords = 0;
+    let allUsedElements: string[] = [];
+    let previousSummary = '';
+    let previousLastSentences = '';
 
-    console.log('API Route: Starting full generation, target words:', TARGET_WORDS);
+    console.log('API Route: Starting full generation, target words:', CONFIG.targetWords);
 
-    // First generate focus areas
-    const focusAreasPrompt = `Divide the topic "${topic}" into 3 distinct subtopics for a boring history lecture. Each subtopic should be different but related to the main topic.
+    // Step 1: Generate structured outline
+    console.log('API Route: Generating outline...');
+    const outlineMessage = await anthropic.messages.create({
+      model: CONFIG.models.content,
+      max_tokens: CONFIG.maxTokens.outline,
+      temperature: CONFIG.temperature.outline,
+      messages: [{
+        role: 'user',
+        content: `Create a detailed outline for a sleep-inducing history lecture on "${topic}".
 
-Provide exactly 3 subtopics, one per line.`;
+Structure it as exactly 3 major sections of roughly equal scope.
+For each section, provide:
+- A section title (a specific subtopic, not just "Introduction" or "Conclusion")
+- 3 subsection topics that meander between related ideas
+- For each subsection, 2-3 specific historical details, dates, or anecdotes to include
 
-    console.log('API Route: Generating focus areas...');
-    const focusAreasMessage = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 300,
-      temperature: 0.7,
-      messages: [
-        {
-          role: 'user',
-          content: focusAreasPrompt,
-        },
-      ],
+The outline should be deliberately meandering. Subsections should drift between related ideas rather than following a rigid logical progression. Each section should feel like a sleepy tangent that eventually circles back.
+
+Format as a numbered outline:
+1. Section Title
+   1.1 Subsection topic
+       - Detail/anecdote
+       - Detail/anecdote
+   1.2 Subsection topic
+       - Detail/anecdote
+       - Detail/anecdote
+   ...
+2. Section Title
+   ...
+3. Section Title
+   ...`,
+      }],
     });
 
-    const focusAreasContent = focusAreasMessage.content[0].type === 'text' ? focusAreasMessage.content[0].text : '';
-    const initialFocusAreas = focusAreasContent.split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
+    const outline = getTextContent(outlineMessage);
+    console.log('API Route: Outline generated, length:', outline.length);
+
+    // Extract section titles as focus areas from outline
+    const sectionTitleMatches = outline.match(/^\d+\.\s+(.+)$/gm) || [];
+    const allFocusAreas = sectionTitleMatches
+      .map(line => line.replace(/^\d+\.\s+/, '').trim())
       .slice(0, 3);
-    
-    const allFocusAreas = [...initialFocusAreas];
-    
-    console.log('API Route: Generated focus areas:', allFocusAreas);
 
-    // Generate initial 3 parts with specified word counts
-    const initialWordCounts = [3000, 3000, 2500];
-    
-    for (let i = 0; i < 3; i++) {
-      console.log(`API Route: Generating part ${i + 1} of 3, target words: ${initialWordCounts[i]}`);
-      const userPrompt = `Generate Part ${i + 1} of a 45-minute sleep-inducing history lecture on "${topic}". 
-This section should be approximately ${initialWordCounts[i]} words and focus on ${allFocusAreas[i]}.
-
-CRITICAL: Do NOT include any stage directions, asterisk actions, or descriptions of how you're speaking. No *clears throat*, *speaking slowly*, etc. Start DIRECTLY with the lecture content.
-
-ABSOLUTELY NO META-TEXT: Do not include ANY of the following:
-- [Continued in next section]
-- [To be continued]
-- [End of Part X]
-- [Beginning of Part X]
-- Any brackets with meta-information
-- Any notes about continuation or section breaks
-- Any editorial comments or annotations
-
-Write in a drowsy, meandering style that includes:
-- Several dates and times (but keep them reasonable, like "in 1423" or "around 2 in the afternoon")
-- Stories about random people from history delivered in a boring way
-- Mix genuinely interesting facts with mundane details, all in the same monotone
-- Detailed descriptions of everyday processes and routines
-- Occasional dramatic events mentioned casually then moving on
-- Tangents about related topics that drift back eventually
-
-IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, formatting, or stage directions. Start immediately with lecture content - don't describe your tone or manner of speaking.`;
-
-      const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4000,
-        temperature: 0.7,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: userPrompt,
-          },
-        ],
-      });
-
-      let content = message.content[0].type === 'text' ? message.content[0].text : '';
-      
-      // Clean up any continuation markers that shouldn't be in the output
-      content = content.replace(/\[Continued in next section\]/gi, '');
-      content = content.replace(/\[To be continued\]/gi, '');
-      content = content.replace(/\[Continuing from previous section\]/gi, '');
-      content = content.trim();
-      
-      const wordCount = content.split(/\s+/).length;
-      
-      console.log(`API Route: Part ${i + 1} generated, actual words: ${wordCount}`);
-      
-      parts.push({
-        content,
-        wordCount,
-        partNumber: i + 1,
-        focusArea: allFocusAreas[i],
-      });
-      
-      totalWords += wordCount;
-      console.log(`API Route: Total words so far: ${totalWords}`);
+    if (allFocusAreas.length === 0) {
+      allFocusAreas.push(topic);
     }
 
-    // Keep generating until we reach target word count
-    while (totalWords < TARGET_WORDS) {
-      console.log(`API Route: Need more content. Current: ${totalWords}, Target: ${TARGET_WORDS}`);
-      
-      // Generate new focus areas for additional content
-      const additionalPrompt = `The lecture on "${topic}" needs more content. We've already covered:
-${allFocusAreas.join('\n')}
+    console.log('API Route: Extracted focus areas:', allFocusAreas);
 
-Provide 3 NEW subtopics that haven't been covered yet, one per line.`;
+    // Step 2: Generate content chunks with context chaining
+    for (let i = 0; i < CONFIG.chunkWordTargets.length; i++) {
+      const targetWordsForChunk = CONFIG.chunkWordTargets[i];
+      console.log(`API Route: Generating chunk ${i + 1} of ${CONFIG.chunkWordTargets.length}, target words: ${targetWordsForChunk}`);
 
-      console.log('API Route: Generating additional focus areas...');
-      const additionalMessage = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 300,
-        temperature: 0.7,
-        messages: [
-          {
-            role: 'user',
-            content: additionalPrompt,
-          },
-        ],
+      let userPrompt: string;
+
+      if (i === 0) {
+        // First chunk: outline context only
+        userPrompt = `Generate section 1 of a sleep-inducing history lecture on "${topic}".
+
+LECTURE OUTLINE (follow this structure):
+${outline}
+
+THIS SECTION COVERS: Section 1 of the outline above.
+TARGET: approximately ${targetWordsForChunk} words.
+
+Begin the lecture directly with content. No introductions or preambles.`;
+      } else {
+        // Subsequent chunks: outline + previous context
+        userPrompt = `Generate section ${i + 1} of a sleep-inducing history lecture on "${topic}".
+
+LECTURE OUTLINE (follow this structure):
+${outline}
+
+THIS SECTION COVERS: Section ${i + 1} of the outline above.
+TARGET: approximately ${targetWordsForChunk} words.
+
+PREVIOUS SECTION SUMMARY (do not repeat this content):
+${previousSummary}
+
+ALREADY-USED NAMES AND DATES (do not re-introduce these):
+${allUsedElements.join(', ')}
+
+CONTINUE NATURALLY FROM THESE LAST SENTENCES:
+"${previousLastSentences}"
+
+Write the lecture content for this section only. Flow naturally from where the previous section ended.`;
+      }
+
+      const chunkMessage = await anthropic.messages.create({
+        model: CONFIG.models.content,
+        max_tokens: CONFIG.maxTokens.content,
+        temperature: CONFIG.temperature.content,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userPrompt }],
       });
 
-      const newFocusAreasContent = additionalMessage.content[0].type === 'text' ? additionalMessage.content[0].text : '';
-      const newFocusAreas = newFocusAreasContent.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .slice(0, 3);
+      let chunkContent = getTextContent(chunkMessage);
+      chunkContent = postProcess(chunkContent);
 
-      // Generate content for new focus areas
-      for (const focusArea of newFocusAreas) {
-        if (totalWords >= TARGET_WORDS) break;
+      const wordCount = countWords(chunkContent);
+      console.log(`API Route: Chunk ${i + 1} generated, actual words: ${wordCount}`);
 
-        const remainingWords = TARGET_WORDS - totalWords;
-        const wordsForPart = Math.min(2500, remainingWords);
+      parts.push({
+        content: chunkContent,
+        wordCount,
+        partNumber: i + 1,
+        focusArea: allFocusAreas[i] || `Section ${i + 1}`,
+      });
 
-        const userPrompt = `Generate Part ${parts.length + 1} of a 45-minute sleep-inducing history lecture on "${topic}". 
-This section should be approximately ${wordsForPart} words and focus on ${focusArea}.
+      totalWords += wordCount;
+      console.log(`API Route: Total words so far: ${totalWords}`);
 
-CRITICAL: Do NOT include any stage directions, asterisk actions, or descriptions of how you're speaking. No *clears throat*, *speaking slowly*, etc. Start DIRECTLY with the lecture content.
+      // Step 3: Generate inter-chunk summary (skip after last chunk)
+      if (i < CONFIG.chunkWordTargets.length - 1) {
+        console.log(`API Route: Generating summary for chunk ${i + 1}...`);
+        const summaryMessage = await anthropic.messages.create({
+          model: CONFIG.models.utility,
+          max_tokens: CONFIG.maxTokens.summary,
+          temperature: 0.3,
+          messages: [{
+            role: 'user',
+            content: `Summarize this lecture section in exactly 3 sentences:
+1. The main subtopic and narrative arc covered.
+2. Key proper nouns, place names, and dates mentioned.
+3. Where the narrative left off (what was the last thing discussed).
 
-ABSOLUTELY NO META-TEXT: Do not include ANY of the following:
-- [Continued in next section]
-- [To be continued]
-- [End of Part X]
-- [Beginning of Part X]
-- Any brackets with meta-information
-- Any notes about continuation or section breaks
-- Any editorial comments or annotations
+Then list all proper nouns and dates mentioned, comma-separated on a new line after "USED:".
 
-Write in a drowsy, meandering style that includes:
-- Several dates and times (but keep them reasonable, like "in 1423" or "around 2 in the afternoon")
-- Stories about random people from history delivered in a boring way
-- Mix genuinely interesting facts with mundane details, all in the same monotone
-- Detailed descriptions of everyday processes and routines
-- Occasional dramatic events mentioned casually then moving on
-- Tangents about related topics that drift back eventually
-
-IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, formatting, or stage directions. Start immediately with lecture content - don't describe your tone or manner of speaking.`;
-
-        const message = await anthropic.messages.create({
-          model: 'claude-sonnet-4-5-20250929',
-          max_tokens: 4000,
-          temperature: 0.7,
-          system: SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: userPrompt,
-            },
-          ],
+Section:
+${chunkContent}`,
+          }],
         });
 
-        const content = message.content[0].type === 'text' ? message.content[0].text : '';
-        const wordCount = content.split(/\s+/).length;
+        const summaryContent = getTextContent(summaryMessage);
 
-        parts.push({
-          content,
-          wordCount,
-          partNumber: parts.length + 1,
-          focusArea,
-        });
+        // Extract the summary (everything before USED:)
+        const usedIndex = summaryContent.indexOf('USED:');
+        if (usedIndex !== -1) {
+          previousSummary = summaryContent.slice(0, usedIndex).trim();
+          const usedLine = summaryContent.slice(usedIndex + 5).trim();
+          const newElements = usedLine.split(',').map(e => e.trim()).filter(e => e.length > 0);
+          allUsedElements = [...allUsedElements, ...newElements];
+        } else {
+          previousSummary = summaryContent.trim();
+        }
 
-        totalWords += wordCount;
-        allFocusAreas.push(focusArea);
+        previousLastSentences = getLastSentences(chunkContent, 3);
+        console.log(`API Route: Summary generated. Used elements count: ${allUsedElements.length}`);
       }
     }
 
+    // Step 4: Overflow loop — generate additional chunks if needed
+    while (totalWords < CONFIG.targetWords) {
+      console.log(`API Route: Need more content. Current: ${totalWords}, Target: ${CONFIG.targetWords}`);
+
+      const remainingWords = CONFIG.targetWords - totalWords;
+      const wordsForPart = Math.min(2500, remainingWords);
+
+      // Get summary of last chunk if we don't have one
+      if (!previousSummary && parts.length > 0) {
+        const lastContent = parts[parts.length - 1].content;
+        previousLastSentences = getLastSentences(lastContent, 3);
+      }
+
+      const overflowPrompt = `Generate an additional section of a sleep-inducing history lecture on "${topic}".
+
+LECTURE OUTLINE (for context on what has been covered):
+${outline}
+
+TARGET: approximately ${wordsForPart} words.
+
+PREVIOUS SECTION SUMMARY (do not repeat this content):
+${previousSummary}
+
+ALREADY-USED NAMES AND DATES (do not re-introduce these):
+${allUsedElements.join(', ')}
+
+CONTINUE NATURALLY FROM THESE LAST SENTENCES:
+"${previousLastSentences}"
+
+Explore a new angle of the topic that hasn't been covered in the outline sections above. Continue the drowsy, meandering tone.`;
+
+      const overflowMessage = await anthropic.messages.create({
+        model: CONFIG.models.content,
+        max_tokens: CONFIG.maxTokens.content,
+        temperature: CONFIG.temperature.content,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: overflowPrompt }],
+      });
+
+      let overflowContent = getTextContent(overflowMessage);
+      overflowContent = postProcess(overflowContent);
+
+      const wordCount = countWords(overflowContent);
+      const focusArea = `Additional section ${parts.length + 1}`;
+
+      parts.push({
+        content: overflowContent,
+        wordCount,
+        partNumber: parts.length + 1,
+        focusArea,
+      });
+
+      totalWords += wordCount;
+      allFocusAreas.push(focusArea);
+
+      // Generate summary for this overflow chunk in case we need another
+      if (totalWords < CONFIG.targetWords) {
+        const summaryMessage = await anthropic.messages.create({
+          model: CONFIG.models.utility,
+          max_tokens: CONFIG.maxTokens.summary,
+          temperature: 0.3,
+          messages: [{
+            role: 'user',
+            content: `Summarize this lecture section in exactly 3 sentences:
+1. The main subtopic and narrative arc covered.
+2. Key proper nouns, place names, and dates mentioned.
+3. Where the narrative left off (what was the last thing discussed).
+
+Then list all proper nouns and dates mentioned, comma-separated on a new line after "USED:".
+
+Section:
+${overflowContent}`,
+          }],
+        });
+
+        const summaryContent = getTextContent(summaryMessage);
+        const usedIndex = summaryContent.indexOf('USED:');
+        if (usedIndex !== -1) {
+          previousSummary = summaryContent.slice(0, usedIndex).trim();
+          const usedLine = summaryContent.slice(usedIndex + 5).trim();
+          const newElements = usedLine.split(',').map(e => e.trim()).filter(e => e.length > 0);
+          allUsedElements = [...allUsedElements, ...newElements];
+        } else {
+          previousSummary = summaryContent.trim();
+        }
+
+        previousLastSentences = getLastSentences(overflowContent, 3);
+      }
+
+      console.log(`API Route: Overflow chunk generated. Total words: ${totalWords}`);
+    }
+
     console.log(`API Route: Generation complete! Total parts: ${parts.length}, Total words: ${totalWords}`);
-    
+
     return NextResponse.json({
       parts,
       totalWords,
@@ -291,7 +441,6 @@ IMPORTANT: Write in flowing paragraphs like a sleepy audio guide. No lists, form
       error: error
     });
 
-    // Return more detailed error for debugging
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
       {
