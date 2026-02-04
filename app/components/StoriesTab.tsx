@@ -67,41 +67,40 @@ export default function StoriesTab() {
       // Use refs to track if still generating
       let isStillGenerating = true;
       
-      // Setup progress updates
+      // Setup progress updates matching new pipeline stages
       const timer1 = setTimeout(() => {
-        console.log('Timer 1 fired - 5 seconds');
         if (isStillGenerating) {
           setCurrentPart(1);
-          setProgressMessage('Writing Part 1: Historical context and background...');
-          console.log('Updated to Part 1');
+          setProgressMessage('Generating lecture outline...');
         }
-      }, 5000);
-      
+      }, 2000);
+
       const timer2 = setTimeout(() => {
-        console.log('Timer 2 fired - 25 seconds');
+        if (isStillGenerating) {
+          setCurrentPart(1);
+          setProgressMessage('Writing section 1...');
+        }
+      }, 8000);
+
+      const timer3 = setTimeout(() => {
         if (isStillGenerating) {
           setCurrentPart(2);
-          setProgressMessage('Writing Part 2: Daily activities and routines...');
-          console.log('Updated to Part 2');
+          setProgressMessage('Summarizing section 1... Writing section 2...');
         }
-      }, 25000);
-      
-      const timer3 = setTimeout(() => {
-        console.log('Timer 3 fired - 45 seconds');
+      }, 35000);
+
+      const timer4 = setTimeout(() => {
         if (isStillGenerating) {
           setCurrentPart(3);
-          setProgressMessage('Writing Part 3: Cultural impact and legacy...');
-          console.log('Updated to Part 3');
+          setProgressMessage('Summarizing section 2... Writing section 3...');
         }
-      }, 45000);
-      
-      const timer4 = setTimeout(() => {
-        console.log('Timer 4 fired - 65 seconds');
+      }, 70000);
+
+      const timer5 = setTimeout(() => {
         if (isStillGenerating) {
-          setProgressMessage('Checking word count and generating additional content if needed...');
-          console.log('Checking word count');
+          setProgressMessage('Finalizing and formatting for audio...');
         }
-      }, 65000);
+      }, 110000);
 
       console.log('Making API request to /api/stories/generate');
       const res = await fetch('/api/stories/generate', {
@@ -129,6 +128,7 @@ export default function StoriesTab() {
       clearTimeout(timer2);
       clearTimeout(timer3);
       clearTimeout(timer4);
+      clearTimeout(timer5);
       
       setGeneratedParts(data.parts || []);
       setProgressMessage('');
@@ -308,7 +308,7 @@ Estimated Audio Duration: ${estimatedMinutes} minutes (at 150 wpm)
             </div>
           )}
           <div style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
-            This will take approximately 2-3 minutes to generate a full 45-minute lecture...
+            This will take approximately 3-4 minutes to generate a full lecture...
           </div>
         </div>
       )}
