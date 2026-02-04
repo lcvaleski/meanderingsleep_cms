@@ -80,6 +80,41 @@ function getLastSentences(text: string, count: number): string {
   return sentences.slice(-count).join('').trim();
 }
 
+async function extractSummary(
+  anthropic: Anthropic,
+  chunkContent: string,
+): Promise<{ summary: string; usedElements: string[] }> {
+  const summaryMessage = await anthropic.messages.create({
+    model: CONFIG.models.utility,
+    max_tokens: CONFIG.maxTokens.summary,
+    temperature: 0.3,
+    messages: [{
+      role: 'user',
+      content: `Summarize this lecture section in exactly 3 sentences:
+1. The main subtopic and narrative arc covered.
+2. Key proper nouns, place names, and dates mentioned.
+3. Where the narrative left off (what was the last thing discussed).
+
+Then list ALL specific anecdotes, proper nouns, dates, place names, and named individuals mentioned, comma-separated on a new line after "USED:". Be exhaustive — include every name and date.
+
+Section:
+${chunkContent}`,
+    }],
+  });
+
+  const summaryContent = getTextContent(summaryMessage);
+  const usedIndex = summaryContent.indexOf('USED:');
+
+  if (usedIndex !== -1) {
+    const summary = summaryContent.slice(0, usedIndex).trim();
+    const usedLine = summaryContent.slice(usedIndex + 5).trim();
+    const usedElements = usedLine.split(',').map(e => e.trim()).filter(e => e.length > 0);
+    return { summary, usedElements };
+  }
+
+  return { summary: summaryContent.trim(), usedElements: [] };
+}
+
 function postProcess(content: string): string {
   // Strip meta-text markers
   content = content.replace(/\[.*?\]/g, '');
@@ -177,7 +212,7 @@ Provide exactly 3 subtopics, one per line.`;
     }> = [];
     let totalWords = 0;
     let allUsedElements: string[] = [];
-    let previousSummary = '';
+    const allSummaries: string[] = [];
     let previousLastSentences = '';
 
     console.log('API Route: Starting full generation, target words:', CONFIG.targetWords);
@@ -259,16 +294,16 @@ ${outline}
 THIS SECTION COVERS: Section ${i + 1} of the outline above.
 TARGET: approximately ${targetWordsForChunk} words.
 
-PREVIOUS SECTION SUMMARY (do not repeat this content):
-${previousSummary}
+WHAT HAS ALREADY BEEN COVERED (do not repeat any of this):
+${allSummaries.join('\n')}
 
-ALREADY-USED NAMES AND DATES (do not re-introduce these):
+ALREADY-USED NAMES, DATES, AND ANECDOTES (do not re-introduce these):
 ${allUsedElements.join(', ')}
 
 CONTINUE NATURALLY FROM THESE LAST SENTENCES:
 "${previousLastSentences}"
 
-Write the lecture content for this section only. Flow naturally from where the previous section ended.`;
+Write the lecture content for this section only. Flow naturally from where the previous section ended. Do not retell any anecdote or reintroduce any person already mentioned above.`;
       }
 
       const chunkMessage = await anthropic.messages.create({
@@ -295,43 +330,13 @@ Write the lecture content for this section only. Flow naturally from where the p
       totalWords += wordCount;
       console.log(`API Route: Total words so far: ${totalWords}`);
 
-      // Step 3: Generate inter-chunk summary (skip after last chunk)
-      if (i < CONFIG.chunkWordTargets.length - 1) {
-        console.log(`API Route: Generating summary for chunk ${i + 1}...`);
-        const summaryMessage = await anthropic.messages.create({
-          model: CONFIG.models.utility,
-          max_tokens: CONFIG.maxTokens.summary,
-          temperature: 0.3,
-          messages: [{
-            role: 'user',
-            content: `Summarize this lecture section in exactly 3 sentences:
-1. The main subtopic and narrative arc covered.
-2. Key proper nouns, place names, and dates mentioned.
-3. Where the narrative left off (what was the last thing discussed).
-
-Then list all proper nouns and dates mentioned, comma-separated on a new line after "USED:".
-
-Section:
-${chunkContent}`,
-          }],
-        });
-
-        const summaryContent = getTextContent(summaryMessage);
-
-        // Extract the summary (everything before USED:)
-        const usedIndex = summaryContent.indexOf('USED:');
-        if (usedIndex !== -1) {
-          previousSummary = summaryContent.slice(0, usedIndex).trim();
-          const usedLine = summaryContent.slice(usedIndex + 5).trim();
-          const newElements = usedLine.split(',').map(e => e.trim()).filter(e => e.length > 0);
-          allUsedElements = [...allUsedElements, ...newElements];
-        } else {
-          previousSummary = summaryContent.trim();
-        }
-
-        previousLastSentences = getLastSentences(chunkContent, 3);
-        console.log(`API Route: Summary generated. Used elements count: ${allUsedElements.length}`);
-      }
+      // Step 3: Generate inter-chunk summary (always, including last chunk for overflow context)
+      console.log(`API Route: Generating summary for chunk ${i + 1}...`);
+      const { summary, usedElements } = await extractSummary(anthropic, chunkContent);
+      allSummaries.push(summary);
+      allUsedElements = [...allUsedElements, ...usedElements];
+      previousLastSentences = getLastSentences(chunkContent, 3);
+      console.log(`API Route: Summary generated. Used elements count: ${allUsedElements.length}`);
     }
 
     // Step 4: Overflow loop — generate additional chunks if needed
@@ -341,29 +346,23 @@ ${chunkContent}`,
       const remainingWords = CONFIG.targetWords - totalWords;
       const wordsForPart = Math.min(2500, remainingWords);
 
-      // Get summary of last chunk if we don't have one
-      if (!previousSummary && parts.length > 0) {
-        const lastContent = parts[parts.length - 1].content;
-        previousLastSentences = getLastSentences(lastContent, 3);
-      }
-
       const overflowPrompt = `Generate an additional section of a sleep-inducing history lecture on "${topic}".
 
-LECTURE OUTLINE (for context on what has been covered):
+LECTURE OUTLINE (the sections below have ALL been written already):
 ${outline}
 
 TARGET: approximately ${wordsForPart} words.
 
-PREVIOUS SECTION SUMMARY (do not repeat this content):
-${previousSummary}
+EVERYTHING ALREADY COVERED (do NOT repeat any of this — every topic, anecdote, and person below has already been discussed):
+${allSummaries.join('\n')}
 
-ALREADY-USED NAMES AND DATES (do not re-introduce these):
+ALREADY-USED NAMES, DATES, AND ANECDOTES (do NOT reintroduce any of these):
 ${allUsedElements.join(', ')}
 
 CONTINUE NATURALLY FROM THESE LAST SENTENCES:
 "${previousLastSentences}"
 
-Explore a new angle of the topic that hasn't been covered in the outline sections above. Continue the drowsy, meandering tone.`;
+You MUST explore an entirely new angle that is NOT in the outline and NOT in the summaries above. Think about adjacent topics: related trades, neighboring regions, later historical developments, or tangential subjects that a drowsy professor might wander into. Do not revisit any person, place, date, or anecdote already mentioned.`;
 
       const overflowMessage = await anthropic.messages.create({
         model: CONFIG.models.content,
@@ -391,35 +390,9 @@ Explore a new angle of the topic that hasn't been covered in the outline section
 
       // Generate summary for this overflow chunk in case we need another
       if (totalWords < CONFIG.targetWords) {
-        const summaryMessage = await anthropic.messages.create({
-          model: CONFIG.models.utility,
-          max_tokens: CONFIG.maxTokens.summary,
-          temperature: 0.3,
-          messages: [{
-            role: 'user',
-            content: `Summarize this lecture section in exactly 3 sentences:
-1. The main subtopic and narrative arc covered.
-2. Key proper nouns, place names, and dates mentioned.
-3. Where the narrative left off (what was the last thing discussed).
-
-Then list all proper nouns and dates mentioned, comma-separated on a new line after "USED:".
-
-Section:
-${overflowContent}`,
-          }],
-        });
-
-        const summaryContent = getTextContent(summaryMessage);
-        const usedIndex = summaryContent.indexOf('USED:');
-        if (usedIndex !== -1) {
-          previousSummary = summaryContent.slice(0, usedIndex).trim();
-          const usedLine = summaryContent.slice(usedIndex + 5).trim();
-          const newElements = usedLine.split(',').map(e => e.trim()).filter(e => e.length > 0);
-          allUsedElements = [...allUsedElements, ...newElements];
-        } else {
-          previousSummary = summaryContent.trim();
-        }
-
+        const { summary, usedElements } = await extractSummary(anthropic, overflowContent);
+        allSummaries.push(summary);
+        allUsedElements = [...allUsedElements, ...usedElements];
         previousLastSentences = getLastSentences(overflowContent, 3);
       }
 
