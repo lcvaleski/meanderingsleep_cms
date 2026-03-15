@@ -287,18 +287,7 @@ export default function Home() {
               color: '#000'
             }}
           >
-            History Sleep
-          </a>
-          <a
-            href="#"
-            onClick={(e) => { e.preventDefault(); setActiveTab('stories'); }}
-            style={{
-              marginRight: '20px',
-              textDecoration: activeTab === 'stories' ? 'underline' : 'none',
-              color: '#000'
-            }}
-          >
-            Stories
+            Upload
           </a>
           <a
             href="#"
