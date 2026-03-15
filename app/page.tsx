@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import StoriesTab from './components/StoriesTab';
+import ConfigTab from './components/ConfigTab';
 import { AudioFile, AudioEntry, HISTORY_CATEGORIES } from './types/audio';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'history' | 'stories'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'stories' | 'config'>('history');
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -292,16 +293,29 @@ export default function Home() {
             href="#"
             onClick={(e) => { e.preventDefault(); setActiveTab('stories'); }}
             style={{
+              marginRight: '20px',
               textDecoration: activeTab === 'stories' ? 'underline' : 'none',
               color: '#000'
             }}
           >
             Stories
           </a>
+          <a
+            href="#"
+            onClick={(e) => { e.preventDefault(); setActiveTab('config'); }}
+            style={{
+              textDecoration: activeTab === 'config' ? 'underline' : 'none',
+              color: '#000'
+            }}
+          >
+            App Config
+          </a>
         </div>
       </div>
       
-      {activeTab === 'stories' ? (
+      {activeTab === 'config' ? (
+        <ConfigTab />
+      ) : activeTab === 'stories' ? (
         <StoriesTab />
       ) : (
         <>
