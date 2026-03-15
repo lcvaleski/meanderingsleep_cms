@@ -66,8 +66,8 @@ export default function ConfigTab() {
       const vis: Record<string, boolean> = {};
       const ord: Record<string, number> = {};
       (data.categories || HISTORY_CATEGORIES).forEach((cat: Category & { visible?: boolean; order?: number }, i: number) => {
-        vis[cat.id] = (cat as any).visible !== false;
-        ord[cat.id] = (cat as any).order ?? i + 1;
+        vis[cat.id] = cat.visible !== false;
+        ord[cat.id] = cat.order ?? i + 1;
       });
       setCategoryVisibility(vis);
       setCategoryOrder(ord);
