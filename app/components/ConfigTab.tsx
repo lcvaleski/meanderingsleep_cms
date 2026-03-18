@@ -23,13 +23,6 @@ const DEFAULT_SECTIONS: SectionConfig[] = [
   { type: 'all', title: 'All Lectures' },
 ];
 
-const SECTION_LABELS: Record<string, string> = {
-  daily: 'Daily Card',
-  free: 'Free Section',
-  new: 'New Section',
-  all: 'All Lectures',
-  category: 'Category',
-};
 
 export default function ConfigTab() {
   const [loading, setLoading] = useState(true);
@@ -126,37 +119,6 @@ export default function ConfigTab() {
     }
   };
 
-  // --- Section management ---
-  const addSection = (type: SectionConfig['type']) => {
-    const newSection: SectionConfig = { type };
-    if (type === 'category') {
-      const firstCat = categories[0];
-      newSection.categoryId = firstCat?.id || '';
-      newSection.title = firstCat?.name || 'Category';
-    } else {
-      newSection.title = SECTION_LABELS[type] || type;
-    }
-    setSections([...sections, newSection]);
-  };
-
-  const removeSection = (index: number) => {
-    setSections(sections.filter((_, i) => i !== index));
-  };
-
-  const moveSection = (index: number, direction: -1 | 1) => {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= sections.length) return;
-    const newSections = [...sections];
-    [newSections[index], newSections[newIndex]] = [newSections[newIndex], newSections[index]];
-    setSections(newSections);
-  };
-
-  const updateSection = (index: number, updates: Partial<SectionConfig>) => {
-    const newSections = [...sections];
-    newSections[index] = { ...newSections[index], ...updates };
-    setSections(newSections);
-  };
-
   // --- Free track toggle ---
   const toggleFreeTrack = (audioId: string) => {
     setFreeAudioIds(prev =>
@@ -166,20 +128,7 @@ export default function ConfigTab() {
     );
   };
 
-  // --- Category order ---
-  const moveCategoryOrder = (catId: string, direction: -1 | 1) => {
-    const currentOrder = categoryOrder[catId] ?? 1;
-    const newOrder = currentOrder + direction;
-    if (newOrder < 1) return;
 
-    // Find the category currently at newOrder and swap
-    const swapCatId = Object.entries(categoryOrder).find(([, ord]) => ord === newOrder)?.[0];
-    setCategoryOrder(prev => {
-      const updated = { ...prev, [catId]: newOrder };
-      if (swapCatId) updated[swapCatId] = currentOrder;
-      return updated;
-    });
-  };
 
   // --- Audio order within category ---
   const getAudiosForCategory = (catId: string): AudioEntry[] => {
@@ -269,154 +218,132 @@ export default function ConfigTab() {
         </div>
       </div>
 
-      {/* Section Ordering */}
+      {/* Home Screen Sections */}
       <div style={{ marginBottom: '30px' }}>
         <h3 style={{ fontSize: '16px', marginBottom: '10px' }}>Home Screen Sections</h3>
         <p style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
-          Control which sections appear on the app home screen and in what order.
+          Reorder sections and toggle visibility. Hidden sections won&apos;t appear in the app.
         </p>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #000' }}>
               <th style={{ textAlign: 'left', padding: '8px 4px' }}>Order</th>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Type</th>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Title</th>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Category</th>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sections.map((section, index) => (
-              <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '8px 4px' }}>
-                  <button onClick={() => moveSection(index, -1)} disabled={index === 0} style={smallBtnStyle}>↑</button>
-                  <button onClick={() => moveSection(index, 1)} disabled={index === sections.length - 1} style={smallBtnStyle}>↓</button>
-                </td>
-                <td style={{ padding: '8px 4px', fontSize: '14px' }}>
-                  {SECTION_LABELS[section.type] || section.type}
-                </td>
-                <td style={{ padding: '8px 4px' }}>
-                  {section.type !== 'daily' && (
-                    <input
-                      type="text"
-                      value={section.title || ''}
-                      onChange={(e) => updateSection(index, { title: e.target.value })}
-                      style={{ ...inputStyle, width: '150px' }}
-                    />
-                  )}
-                </td>
-                <td style={{ padding: '8px 4px' }}>
-                  {section.type === 'category' && (
-                    <select
-                      value={section.categoryId || ''}
-                      onChange={(e) => {
-                        const cat = categories.find(c => c.id === e.target.value);
-                        updateSection(index, {
-                          categoryId: e.target.value,
-                          title: cat?.name || e.target.value,
-                        });
-                      }}
-                      style={{ ...selectStyle, width: '180px' }}
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </td>
-                <td style={{ padding: '8px 4px' }}>
-                  <button onClick={() => removeSection(index)} style={smallBtnStyle}>Remove</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
-          <button onClick={() => addSection('category')} style={btnStyle}>+ Category Section</button>
-          <button onClick={() => addSection('daily')} style={btnStyle}>+ Daily</button>
-          <button onClick={() => addSection('free')} style={btnStyle}>+ Free</button>
-          <button onClick={() => addSection('new')} style={btnStyle}>+ New</button>
-          <button onClick={() => addSection('all')} style={btnStyle}>+ All</button>
-        </div>
-      </div>
-
-      {/* Category Visibility & Order */}
-      <div style={{ marginBottom: '30px' }}>
-        <h3 style={{ fontSize: '16px', marginBottom: '10px' }}>Categories</h3>
-        <p style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
-          Toggle visibility and reorder categories. Hidden categories won&apos;t appear in the app.
-        </p>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #000' }}>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Order</th>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Category</th>
+              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Section</th>
               <th style={{ textAlign: 'left', padding: '8px 4px' }}>Visible</th>
             </tr>
           </thead>
           <tbody>
-            {sortedCategoriesForDisplay.map((cat) => {
-              const catAudios = getAudiosForCategory(cat.id);
-              const isExpanded = expandedCategory === cat.id;
-              return (
-                <tr key={cat.id} style={{ borderBottom: '1px solid #eee', verticalAlign: 'top' }}>
-                  <td style={{ padding: '8px 4px' }}>
-                    <button onClick={() => moveCategoryOrder(cat.id, -1)} style={smallBtnStyle}>↑</button>
-                    <button onClick={() => moveCategoryOrder(cat.id, 1)} style={smallBtnStyle}>↓</button>
-                    <span style={{ marginLeft: '8px', fontSize: '13px', color: '#999' }}>
-                      {categoryOrder[cat.id] ?? '—'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span
-                        onClick={() => setExpandedCategory(isExpanded ? null : cat.id)}
-                        style={{ cursor: 'pointer', fontSize: '14px' }}
-                      >
-                        {isExpanded ? '▼' : '▶'}
-                      </span>
-                      <input
-                        type="text"
-                        value={cat.name}
-                        onChange={(e) => {
-                          setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, name: e.target.value } : c));
-                        }}
-                        style={{ ...inputStyle, width: '180px' }}
-                      />
-                      <span style={{ fontSize: '12px', color: '#999' }}>
-                        {catAudios.length} title{catAudios.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    {isExpanded && catAudios.length > 0 && (
-                      <div style={{ marginTop: '8px', marginLeft: '16px' }}>
-                        {catAudios.map((audio, idx) => (
-                          <div key={audio.id} style={{ display: 'flex', alignItems: 'center', padding: '3px 0', gap: '6px' }}>
-                            <button onClick={() => moveAudioInCategory(cat.id, audio.id, -1)} disabled={idx === 0} style={smallBtnStyle}>↑</button>
-                            <button onClick={() => moveAudioInCategory(cat.id, audio.id, 1)} disabled={idx === catAudios.length - 1} style={smallBtnStyle}>↓</button>
-                            <span style={{ fontSize: '13px' }}>
-                              {audio.title || audio.id}
-                              <span style={{ color: '#999', marginLeft: '6px', fontSize: '12px' }}>{audio.id}</span>
-                            </span>
-                          </div>
-                        ))}
+            {(() => {
+              // Build unified list of all sections: built-in + categories
+              const builtInSections = [
+                { id: '__daily__', name: 'Daily Card', isBuiltIn: true },
+                { id: '__free__', name: 'Complimentary', isBuiltIn: true },
+                { id: '__new__', name: 'New', isBuiltIn: true },
+                { id: '__all__', name: 'All Lectures', isBuiltIn: true },
+              ];
+              const allItems = [
+                ...builtInSections.map(s => ({
+                  ...s,
+                  order: categoryOrder[s.id] ?? (s.id === '__daily__' ? -4 : s.id === '__free__' ? -3 : s.id === '__new__' ? -2 : -1),
+                })),
+                ...sortedCategoriesForDisplay.map(cat => ({
+                  id: cat.id,
+                  name: cat.name,
+                  isBuiltIn: false,
+                  order: categoryOrder[cat.id] ?? 99,
+                })),
+              ].sort((a, b) => a.order - b.order);
+
+              return allItems.map((item, idx) => {
+                const isCategory = !item.isBuiltIn;
+                const catAudios = isCategory ? getAudiosForCategory(item.id) : [];
+                const isExpanded = expandedCategory === item.id;
+                const isVisible = categoryVisibility[item.id] !== false;
+
+                return (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #eee', verticalAlign: 'top' }}>
+                    <td style={{ padding: '8px 4px' }}>
+                      <button onClick={() => {
+                        // Move in unified order
+                        const currentOrder = categoryOrder[item.id] ?? item.order;
+                        const newOrder = currentOrder - 1;
+                        const swapItem = allItems.find(a => (categoryOrder[a.id] ?? a.order) === newOrder);
+                        setCategoryOrder(prev => {
+                          const updated = { ...prev, [item.id]: newOrder };
+                          if (swapItem) updated[swapItem.id] = currentOrder;
+                          return updated;
+                        });
+                      }} disabled={idx === 0} style={smallBtnStyle}>↑</button>
+                      <button onClick={() => {
+                        const currentOrder = categoryOrder[item.id] ?? item.order;
+                        const newOrder = currentOrder + 1;
+                        const swapItem = allItems.find(a => (categoryOrder[a.id] ?? a.order) === newOrder);
+                        setCategoryOrder(prev => {
+                          const updated = { ...prev, [item.id]: newOrder };
+                          if (swapItem) updated[swapItem.id] = currentOrder;
+                          return updated;
+                        });
+                      }} disabled={idx === allItems.length - 1} style={smallBtnStyle}>↓</button>
+                    </td>
+                    <td style={{ padding: '8px 4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {isCategory && (
+                          <span
+                            onClick={() => setExpandedCategory(isExpanded ? null : item.id)}
+                            style={{ cursor: 'pointer', fontSize: '14px' }}
+                          >
+                            {isExpanded ? '▼' : '▶'}
+                          </span>
+                        )}
+                        {isCategory ? (
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => {
+                              setCategories(prev => prev.map(c => c.id === item.id ? { ...c, name: e.target.value } : c));
+                            }}
+                            style={{ ...inputStyle, width: '180px' }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: '14px', fontWeight: 500 }}>{item.name}</span>
+                        )}
+                        {isCategory && (
+                          <span style={{ fontSize: '12px', color: '#999' }}>
+                            {catAudios.length} title{catAudios.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </td>
-                  <td style={{ padding: '8px 4px' }}>
-                    <button
-                      onClick={() => setCategoryVisibility(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}
-                      style={{
-                        ...smallBtnStyle,
-                        background: categoryVisibility[cat.id] !== false ? '#4CAF50' : '#fff',
-                        color: categoryVisibility[cat.id] !== false ? '#fff' : '#000',
-                      }}
-                    >
-                      {categoryVisibility[cat.id] !== false ? 'Visible' : 'Hidden'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+                      {isCategory && isExpanded && catAudios.length > 0 && (
+                        <div style={{ marginTop: '8px', marginLeft: '16px' }}>
+                          {catAudios.map((audio, audioIdx) => (
+                            <div key={audio.id} style={{ display: 'flex', alignItems: 'center', padding: '3px 0', gap: '6px' }}>
+                              <button onClick={() => moveAudioInCategory(item.id, audio.id, -1)} disabled={audioIdx === 0} style={smallBtnStyle}>↑</button>
+                              <button onClick={() => moveAudioInCategory(item.id, audio.id, 1)} disabled={audioIdx === catAudios.length - 1} style={smallBtnStyle}>↓</button>
+                              <span style={{ fontSize: '13px' }}>
+                                {audio.title || audio.id}
+                                <span style={{ color: '#999', marginLeft: '6px', fontSize: '12px' }}>{audio.id}</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '8px 4px' }}>
+                      <button
+                        onClick={() => setCategoryVisibility(prev => ({ ...prev, [item.id]: !isVisible }))}
+                        style={{
+                          ...smallBtnStyle,
+                          background: isVisible ? '#4CAF50' : '#fff',
+                          color: isVisible ? '#fff' : '#000',
+                        }}
+                      >
+                        {isVisible ? 'Visible' : 'Hidden'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              });
+            })()}
           </tbody>
         </table>
       </div>
@@ -460,14 +387,6 @@ const selectStyle: React.CSSProperties = {
   border: '1px solid #000',
   fontSize: '14px',
   fontFamily: 'inherit',
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: '5px 12px',
-  border: '1px solid #000',
-  background: '#fff',
-  cursor: 'pointer',
-  fontSize: '13px',
 };
 
 const smallBtnStyle: React.CSSProperties = {
