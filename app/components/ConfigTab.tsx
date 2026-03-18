@@ -133,26 +133,35 @@ export default function ConfigTab() {
 
 
 
-  // --- Audio order within category ---
-  const getAudiosForCategory = (catId: string): AudioEntry[] => {
-    const catAudios = audios.filter(a => a.category === catId);
-    const order = audioOrder[catId];
-    if (!order) return catAudios;
-    return [...catAudios].sort((a, b) => {
+  // --- Audio order within any section ---
+  const getAudiosForSection = (sectionId: string): AudioEntry[] => {
+    let sectionAudios: AudioEntry[];
+    if (sectionId === '__free__') {
+      sectionAudios = audios.filter(a => freeAudioIds.includes(a.id));
+    } else if (sectionId === '__new__') {
+      sectionAudios = audios.filter(a => a.isNew);
+    } else if (sectionId === '__all__') {
+      sectionAudios = [...audios];
+    } else {
+      sectionAudios = audios.filter(a => a.category === sectionId);
+    }
+    const order = audioOrder[sectionId];
+    if (!order) return sectionAudios;
+    return [...sectionAudios].sort((a, b) => {
       const idxA = order.indexOf(a.id);
       const idxB = order.indexOf(b.id);
       return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
     });
   };
 
-  const moveAudioInCategory = (catId: string, audioId: string, direction: -1 | 1) => {
-    const sorted = getAudiosForCategory(catId);
+  const moveAudioInSection = (sectionId: string, audioId: string, direction: -1 | 1) => {
+    const sorted = getAudiosForSection(sectionId);
     const ids = sorted.map(a => a.id);
     const idx = ids.indexOf(audioId);
     const newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= ids.length) return;
     [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
-    setAudioOrder(prev => ({ ...prev, [catId]: ids }));
+    setAudioOrder(prev => ({ ...prev, [sectionId]: ids }));
   };
 
   if (loading) return <p>Loading config...</p>;
@@ -259,7 +268,8 @@ export default function ConfigTab() {
 
               return allItems.map((item, idx) => {
                 const isCategory = !item.isBuiltIn;
-                const catAudios = isCategory ? getAudiosForCategory(item.id) : [];
+                const isDaily = item.id === '__daily__';
+                const sectionAudios = isDaily ? [] : getAudiosForSection(item.id);
                 const isExpanded = expandedCategory === item.id;
                 const isVisible = categoryVisibility[item.id] !== false;
 
@@ -290,7 +300,7 @@ export default function ConfigTab() {
                     </td>
                     <td style={{ padding: '8px 4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {isCategory && (
+                        {!isDaily && sectionAudios.length > 0 && (
                           <span
                             onClick={() => setExpandedCategory(isExpanded ? null : item.id)}
                             style={{ cursor: 'pointer', fontSize: '14px' }}
@@ -319,18 +329,18 @@ export default function ConfigTab() {
                             style={{ ...inputStyle, width: '180px' }}
                           />
                         )}
-                        {isCategory && (
+                        {!isDaily && sectionAudios.length > 0 && (
                           <span style={{ fontSize: '12px', color: '#999' }}>
-                            {catAudios.length} title{catAudios.length !== 1 ? 's' : ''}
+                            {sectionAudios.length} title{sectionAudios.length !== 1 ? 's' : ''}
                           </span>
                         )}
                       </div>
-                      {isCategory && isExpanded && catAudios.length > 0 && (
+                      {!isDaily && isExpanded && sectionAudios.length > 0 && (
                         <div style={{ marginTop: '8px', marginLeft: '16px' }}>
-                          {catAudios.map((audio, audioIdx) => (
+                          {sectionAudios.map((audio, audioIdx) => (
                             <div key={audio.id} style={{ display: 'flex', alignItems: 'center', padding: '3px 0', gap: '6px' }}>
-                              <button onClick={() => moveAudioInCategory(item.id, audio.id, -1)} disabled={audioIdx === 0} style={smallBtnStyle}>↑</button>
-                              <button onClick={() => moveAudioInCategory(item.id, audio.id, 1)} disabled={audioIdx === catAudios.length - 1} style={smallBtnStyle}>↓</button>
+                              <button onClick={() => moveAudioInSection(item.id, audio.id, -1)} disabled={audioIdx === 0} style={smallBtnStyle}>↑</button>
+                              <button onClick={() => moveAudioInSection(item.id, audio.id, 1)} disabled={audioIdx === sectionAudios.length - 1} style={smallBtnStyle}>↓</button>
                               <span style={{ fontSize: '13px' }}>
                                 {audio.title || audio.id}
                                 <span style={{ color: '#999', marginLeft: '6px', fontSize: '12px' }}>{audio.id}</span>
