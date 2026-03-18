@@ -21,8 +21,8 @@ export default function Home() {
   const [isNew, setIsNew] = useState(false);
   const [category, setCategory] = useState<string>('');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
-  const [editingImage, setEditingImage] = useState<string | null>(null);
-  const [tempImageUrl, setTempImageUrl] = useState<string>('');
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>(HISTORY_CATEGORIES);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -129,12 +129,49 @@ export default function Home() {
         throw new Error(data.error || 'Failed to update image URL');
       }
 
-      setEditingImage(null);
-      setTempImageUrl('');
       await fetchAudioFiles();
     } catch (error) {
       console.error('Error updating image URL:', error);
       setError(error instanceof Error ? error.message : 'Failed to update image URL');
+    }
+  };
+
+  const handleImageDrop = async (fileName: string, file: File) => {
+    setUploadingImage(fileName);
+    try {
+      // Get signed URL for image upload
+      const ext = file.name.split('.').pop() || 'jpg';
+      const imageFileName = `${fileName.replace('.mp3', '')}_${Date.now()}.${ext}`;
+      const res = await fetch('/api/files/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: imageFileName, contentType: file.type }),
+      });
+
+      if (!res.ok) throw new Error('Failed to get upload URL');
+
+      const { signedUrl, publicUrl } = await res.json();
+
+      // Upload image to GCS
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+          'x-goog-acl': 'public-read',
+        },
+      });
+
+      if (!uploadRes.ok) throw new Error('Failed to upload image');
+
+      // Update the JSON with the new image URL
+      await handleImageUpdate(fileName, publicUrl);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setError(error instanceof Error ? error.message : 'Failed to upload image');
+    } finally {
+      setUploadingImage(null);
+      setDragOver(null);
     }
   };
 
@@ -601,95 +638,65 @@ export default function Home() {
                               )}
                             </td>
                           <td style={{ padding: '12px 8px' }}>
-                            {editingImage === file.name ? (
-                                <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                                  <input
-                                    type="text"
-                                    autoFocus
-                                    defaultValue={jsonEntry?.imageUrl || ''}
-                                    onChange={(e) => setTempImageUrl(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleImageUpdate(file.name, tempImageUrl || (e.target as HTMLInputElement).value);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingImage(null);
-                                        setTempImageUrl('');
-                                      }
-                                    }}
-                                    placeholder="GCS image URL"
+                            <div
+                              onDragOver={(e) => { e.preventDefault(); setDragOver(file.name); }}
+                              onDragLeave={() => setDragOver(null)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                setDragOver(null);
+                                const droppedFile = e.dataTransfer.files[0];
+                                if (droppedFile && droppedFile.type.startsWith('image/')) {
+                                  handleImageDrop(file.name, droppedFile);
+                                }
+                              }}
+                              onClick={() => {
+                                const input = document.createElement('input');
+                                input.type = 'file';
+                                input.accept = 'image/*';
+                                input.onchange = (e) => {
+                                  const picked = (e.target as HTMLInputElement).files?.[0];
+                                  if (picked) handleImageDrop(file.name, picked);
+                                };
+                                input.click();
+                              }}
+                              style={{
+                                cursor: 'pointer',
+                                border: dragOver === file.name ? '2px dashed #000' : '1px dashed #ccc',
+                                borderRadius: '4px',
+                                padding: '4px',
+                                minWidth: '50px',
+                                minHeight: '40px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '5px',
+                                background: dragOver === file.name ? '#f0f0f0' : 'transparent',
+                              }}
+                            >
+                              {uploadingImage === file.name ? (
+                                <span style={{ fontSize: '12px', color: '#666' }}>Uploading...</span>
+                              ) : jsonEntry?.imageUrl ? (
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={jsonEntry.imageUrl}
+                                    alt=""
                                     style={{
-                                      padding: '2px 4px',
-                                      border: '1px solid #000',
-                                      fontSize: '12px',
-                                      width: '200px',
-                                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                                      width: '30px',
+                                      height: '30px',
+                                      objectFit: 'cover',
+                                      border: '1px solid #ccc'
+                                    }}
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
                                     }}
                                   />
-                                  <button
-                                    onClick={() => handleImageUpdate(file.name, tempImageUrl || document.querySelector<HTMLInputElement>('input[type="text"][placeholder="GCS image URL"]')?.value || '')}
-                                    style={{
-                                      padding: '2px 6px',
-                                      border: '1px solid #000',
-                                      background: '#fff',
-                                      cursor: 'pointer',
-                                      fontSize: '12px'
-                                    }}
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingImage(null);
-                                      setTempImageUrl('');
-                                    }}
-                                    style={{
-                                      padding: '2px 6px',
-                                      border: '1px solid #000',
-                                      background: '#fff',
-                                      cursor: 'pointer',
-                                      fontSize: '12px'
-                                    }}
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
+                                  <span style={{ fontSize: '11px', color: '#666' }}>Drop to replace</span>
+                                </>
                               ) : (
-                                <div
-                                  onClick={() => {
-                                    setEditingImage(file.name);
-                                    setTempImageUrl(jsonEntry?.imageUrl || '');
-                                  }}
-                                  style={{
-                                    cursor: 'pointer',
-                                    textDecoration: 'underline',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                  }}
-                                >
-                                  {jsonEntry?.imageUrl ? (
-                                    <>
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        src={jsonEntry.imageUrl}
-                                        alt=""
-                                        style={{
-                                          width: '30px',
-                                          height: '30px',
-                                          objectFit: 'cover',
-                                          border: '1px solid #ccc'
-                                        }}
-                                        onError={(e) => {
-                                          (e.target as HTMLImageElement).style.display = 'none';
-                                        }}
-                                      />
-                                      <span style={{ fontSize: '12px', color: '#666' }}>Edit</span>
-                                    </>
-                                  ) : (
-                                    <span style={{ fontSize: '12px', color: '#999' }}>Add image</span>
-                                  )}
-                                </div>
+                                <span style={{ fontSize: '11px', color: '#999' }}>Drop image</span>
                               )}
+                            </div>
                             </td>
                           <td style={{ padding: '12px 8px' }}>
                             <button
