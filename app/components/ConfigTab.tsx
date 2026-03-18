@@ -9,12 +9,6 @@ interface SectionConfig {
   categoryId?: string;
 }
 
-interface AppConfig {
-  dailyAudioId?: string;
-  freeAudioIds: string[];
-  sections: SectionConfig[];
-  audioOrder?: Record<string, string[]>;
-}
 
 const DEFAULT_SECTIONS: SectionConfig[] = [
   { type: 'daily' },
@@ -40,6 +34,11 @@ export default function ConfigTab() {
   const [categoryOrder, setCategoryOrder] = useState<Record<string, number>>({});
   const [audioOrder, setAudioOrder] = useState<Record<string, string[]>>({});
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [sectionNames, setSectionNames] = useState<Record<string, string>>({
+    '__free__': 'Complimentary',
+    '__new__': 'New',
+    '__all__': 'All Lectures',
+  });
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -57,6 +56,7 @@ export default function ConfigTab() {
         setFreeAudioIds(data.config.freeAudioIds || ['HIST001', 'HIST002', 'HIST005', 'HIST006']);
         setSections(data.config.sections || DEFAULT_SECTIONS);
         if (data.config.audioOrder) setAudioOrder(data.config.audioOrder);
+        if (data.config.sectionNames) setSectionNames(prev => ({ ...prev, ...data.config.sectionNames }));
       }
 
       // Build visibility/order maps from categories
@@ -94,11 +94,14 @@ export default function ConfigTab() {
         visible: categoryVisibility[cat.id] !== false,
       }));
 
-      const config: AppConfig = {
+      const config = {
         dailyAudioId: dailyAudioId || undefined,
         freeAudioIds,
         sections,
         audioOrder,
+        sectionNames,
+        sectionOrder: categoryOrder,
+        sectionVisibility: categoryVisibility,
       };
 
       const res = await fetch('/api/config', {
@@ -237,9 +240,9 @@ export default function ConfigTab() {
               // Build unified list of all sections: built-in + categories
               const builtInSections = [
                 { id: '__daily__', name: 'Daily Card', isBuiltIn: true },
-                { id: '__free__', name: 'Complimentary', isBuiltIn: true },
-                { id: '__new__', name: 'New', isBuiltIn: true },
-                { id: '__all__', name: 'All Lectures', isBuiltIn: true },
+                { id: '__free__', name: sectionNames['__free__'] || 'Complimentary', isBuiltIn: true },
+                { id: '__new__', name: sectionNames['__new__'] || 'New', isBuiltIn: true },
+                { id: '__all__', name: sectionNames['__all__'] || 'All Lectures', isBuiltIn: true },
               ];
               const allItems = [
                 ...builtInSections.map(s => ({
@@ -295,7 +298,9 @@ export default function ConfigTab() {
                             {isExpanded ? '▼' : '▶'}
                           </span>
                         )}
-                        {isCategory ? (
+                        {item.id === '__daily__' ? (
+                          <span style={{ fontSize: '14px', fontWeight: 500 }}>{item.name}</span>
+                        ) : isCategory ? (
                           <input
                             type="text"
                             value={item.name}
@@ -305,7 +310,14 @@ export default function ConfigTab() {
                             style={{ ...inputStyle, width: '180px' }}
                           />
                         ) : (
-                          <span style={{ fontSize: '14px', fontWeight: 500 }}>{item.name}</span>
+                          <input
+                            type="text"
+                            value={sectionNames[item.id] || item.name}
+                            onChange={(e) => {
+                              setSectionNames(prev => ({ ...prev, [item.id]: e.target.value }));
+                            }}
+                            style={{ ...inputStyle, width: '180px' }}
+                          />
                         )}
                         {isCategory && (
                           <span style={{ fontSize: '12px', color: '#999' }}>
