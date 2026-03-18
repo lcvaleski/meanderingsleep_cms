@@ -21,7 +21,7 @@ interface AudioEntry {
   imageUrl?: string;
 }
 
-async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileName: string, newEntry: AudioEntry) {
+async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileName: string, newEntry: AudioEntry, categories?: { id: string; name: string }[]) {
   try {
     const file = bucket.file(fileName);
     const [exists] = await file.exists();
@@ -52,7 +52,7 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
     
     // Add categories to history JSON
     if (fileName === 'history-audio-list.json') {
-      json.categories = HISTORY_CATEGORIES;
+      json.categories = categories && Array.isArray(categories) ? categories : HISTORY_CATEGORIES;
     }
     
     await file.save(JSON.stringify(json, null, 2), {
@@ -73,7 +73,7 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { folder, title, gender, topic, id, uploadPath, voiceName, isNew, category, imageUrl } = body;
+    const { folder, title, gender, topic, id, uploadPath, voiceName, isNew, category, imageUrl, categories } = body;
 
     if (!id || !uploadPath) {
       return NextResponse.json(
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     }
 
     // Update the JSON file
-    await updateJsonInBucket(bucket, jsonFileName, jsonEntry);
+    await updateJsonInBucket(bucket, jsonFileName, jsonEntry, categories);
 
     return NextResponse.json({
       message: 'JSON updated successfully',

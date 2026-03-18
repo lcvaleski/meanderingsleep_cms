@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import StoriesTab from './components/StoriesTab';
 import ConfigTab from './components/ConfigTab';
-import { AudioFile, AudioEntry, HISTORY_CATEGORIES } from './types/audio';
+import { AudioFile, AudioEntry, Category, HISTORY_CATEGORIES } from './types/audio';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'history' | 'stories' | 'config'>('history');
@@ -23,6 +23,10 @@ export default function Home() {
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editingImage, setEditingImage] = useState<string | null>(null);
   const [tempImageUrl, setTempImageUrl] = useState<string>('');
+  const [categories, setCategories] = useState<Category[]>(HISTORY_CATEGORIES);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryId, setNewCategoryId] = useState('');
 
   const fetchAudioFiles = useCallback(async () => {
     try {
@@ -40,6 +44,9 @@ export default function Home() {
             setJsonData(jsonContent.audios);
             const voices = [...new Set(jsonContent.audios.map((item: AudioEntry) => item.voice).filter((v: string | undefined) => v))] as string[];
             setAvailableVoices(voices);
+          }
+          if (jsonContent.categories && Array.isArray(jsonContent.categories)) {
+            setCategories(jsonContent.categories);
           }
         }
       } catch (jsonError) {
@@ -237,6 +244,7 @@ export default function Home() {
           voiceName,
           isNew,
           category,
+          categories,
         }),
       });
 
@@ -344,24 +352,91 @@ export default function Home() {
             </div>
             <div style={{ marginBottom: '10px' }}>
               <label style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '5px',
-                  border: '1px solid #000',
-                  fontSize: '16px',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
-                }}
-              >
-                <option value="">Select a category</option>
-                {HISTORY_CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
+              {creatingCategory ? (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    placeholder="Category name"
+                    value={newCategoryName}
+                    onChange={(e) => {
+                      setNewCategoryName(e.target.value);
+                      setNewCategoryId(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+                    }}
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      padding: '5px',
+                      border: '1px solid #000',
+                      fontSize: '16px',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (newCategoryName.trim() && newCategoryId.trim()) {
+                        const newCat = { id: newCategoryId, name: newCategoryName.trim() };
+                        setCategories(prev => [...prev, newCat]);
+                        setCategory(newCategoryId);
+                        setCreatingCategory(false);
+                        setNewCategoryName('');
+                        setNewCategoryId('');
+                      }
+                    }}
+                    disabled={!newCategoryName.trim()}
+                    style={{
+                      padding: '5px 10px',
+                      border: '1px solid #000',
+                      background: newCategoryName.trim() ? '#fff' : '#ccc',
+                      cursor: newCategoryName.trim() ? 'pointer' : 'default',
+                      fontSize: '16px'
+                    }}
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCreatingCategory(false);
+                      setNewCategoryName('');
+                      setNewCategoryId('');
+                    }}
+                    style={{
+                      padding: '5px 10px',
+                      border: '1px solid #000',
+                      background: '#fff',
+                      cursor: 'pointer',
+                      fontSize: '16px'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={category}
+                  onChange={(e) => {
+                    if (e.target.value === '__new__') {
+                      setCreatingCategory(true);
+                    } else {
+                      setCategory(e.target.value);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '5px',
+                    border: '1px solid #000',
+                    fontSize: '16px',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                  }}
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Create new category</option>
+                </select>
+              )}
             </div>
             <div style={{ marginBottom: '10px' }}>
               <label style={{ display: 'block', marginBottom: '5px' }}>
@@ -510,7 +585,7 @@ export default function Home() {
                                   }}
                                 >
                                   <option value="">No category</option>
-                                  {HISTORY_CATEGORIES.map((cat) => (
+                                  {categories.map((cat) => (
                                     <option key={cat.id} value={cat.id}>
                                       {cat.name}
                                     </option>
@@ -521,7 +596,7 @@ export default function Home() {
                                   onClick={() => setEditingCategory(file.name)}
                                   style={{ cursor: 'pointer', textDecoration: 'underline' }}
                                 >
-                                  {jsonEntry?.category ? HISTORY_CATEGORIES.find(c => c.id === jsonEntry.category)?.name || 'No category' : 'No category'}
+                                  {jsonEntry?.category ? categories.find(c => c.id === jsonEntry.category)?.name || jsonEntry.category : 'No category'}
                                 </div>
                               )}
                             </td>
