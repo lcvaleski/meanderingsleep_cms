@@ -21,6 +21,7 @@ export default function Home() {
   const [isNew, setIsNew] = useState(false);
   const [category, setCategory] = useState<string>('');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>(HISTORY_CATEGORIES);
@@ -82,6 +83,25 @@ export default function Home() {
     } catch (error) {
       console.error('Error toggling new status:', error);
       setError(error instanceof Error ? error.message : 'Failed to toggle new status');
+    }
+  };
+
+  const handleTitleUpdate = async (fileName: string, newTitle: string) => {
+    try {
+      const res = await fetch('/api/files/update-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName, title: newTitle }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update title');
+      }
+      setEditingTitle(null);
+      await fetchAudioFiles();
+    } catch (error) {
+      console.error('Error updating title:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update title');
     }
   };
 
@@ -589,7 +609,43 @@ export default function Home() {
                         <tr key={file.name} style={{ borderBottom: '1px solid #eee' }}>
                           <td style={{ padding: '12px 8px 12px 0' }}>
                             <div>
-                              {jsonEntry?.title || file.name}
+                              {editingTitle === file.name ? (
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  defaultValue={jsonEntry?.title || file.name}
+                                  onBlur={(e) => {
+                                    const val = e.target.value.trim();
+                                    if (val && val !== (jsonEntry?.title || '')) {
+                                      handleTitleUpdate(file.name, val);
+                                    } else {
+                                      setEditingTitle(null);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = (e.target as HTMLInputElement).value.trim();
+                                      if (val) handleTitleUpdate(file.name, val);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingTitle(null);
+                                    }
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '4px',
+                                    border: '1px solid #000',
+                                    fontSize: '14px',
+                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  onClick={() => setEditingTitle(file.name)}
+                                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                                >
+                                  {jsonEntry?.title || file.name}
+                                </span>
+                              )}
                               <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
                                 {file.url}
                               </div>
