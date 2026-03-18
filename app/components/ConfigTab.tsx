@@ -13,6 +13,7 @@ interface AppConfig {
   dailyAudioId?: string;
   freeAudioIds: string[];
   sections: SectionConfig[];
+  audioOrder?: Record<string, string[]>;
 }
 
 const DEFAULT_SECTIONS: SectionConfig[] = [
@@ -44,6 +45,8 @@ export default function ConfigTab() {
   const [sections, setSections] = useState<SectionConfig[]>(DEFAULT_SECTIONS);
   const [categoryVisibility, setCategoryVisibility] = useState<Record<string, boolean>>({});
   const [categoryOrder, setCategoryOrder] = useState<Record<string, number>>({});
+  const [audioOrder, setAudioOrder] = useState<Record<string, string[]>>({});
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -60,6 +63,7 @@ export default function ConfigTab() {
         setDailyAudioId(data.config.dailyAudioId || '');
         setFreeAudioIds(data.config.freeAudioIds || ['HIST001', 'HIST002', 'HIST005', 'HIST006']);
         setSections(data.config.sections || DEFAULT_SECTIONS);
+        if (data.config.audioOrder) setAudioOrder(data.config.audioOrder);
       }
 
       // Build visibility/order maps from categories
@@ -101,6 +105,7 @@ export default function ConfigTab() {
         dailyAudioId: dailyAudioId || undefined,
         freeAudioIds,
         sections,
+        audioOrder,
       };
 
       const res = await fetch('/api/config', {
@@ -174,6 +179,28 @@ export default function ConfigTab() {
       if (swapCatId) updated[swapCatId] = currentOrder;
       return updated;
     });
+  };
+
+  // --- Audio order within category ---
+  const getAudiosForCategory = (catId: string): AudioEntry[] => {
+    const catAudios = audios.filter(a => a.category === catId);
+    const order = audioOrder[catId];
+    if (!order) return catAudios;
+    return [...catAudios].sort((a, b) => {
+      const idxA = order.indexOf(a.id);
+      const idxB = order.indexOf(b.id);
+      return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+    });
+  };
+
+  const moveAudioInCategory = (catId: string, audioId: string, direction: -1 | 1) => {
+    const sorted = getAudiosForCategory(catId);
+    const ids = sorted.map(a => a.id);
+    const idx = ids.indexOf(audioId);
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= ids.length) return;
+    [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
+    setAudioOrder(prev => ({ ...prev, [catId]: ids }));
   };
 
   if (loading) return <p>Loading config...</p>;
@@ -328,30 +355,68 @@ export default function ConfigTab() {
             </tr>
           </thead>
           <tbody>
-            {sortedCategoriesForDisplay.map((cat) => (
-              <tr key={cat.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '8px 4px' }}>
-                  <button onClick={() => moveCategoryOrder(cat.id, -1)} style={smallBtnStyle}>↑</button>
-                  <button onClick={() => moveCategoryOrder(cat.id, 1)} style={smallBtnStyle}>↓</button>
-                  <span style={{ marginLeft: '8px', fontSize: '13px', color: '#999' }}>
-                    {categoryOrder[cat.id] ?? '—'}
-                  </span>
-                </td>
-                <td style={{ padding: '8px 4px', fontSize: '14px' }}>{cat.name}</td>
-                <td style={{ padding: '8px 4px' }}>
-                  <button
-                    onClick={() => setCategoryVisibility(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}
-                    style={{
-                      ...smallBtnStyle,
-                      background: categoryVisibility[cat.id] !== false ? '#4CAF50' : '#fff',
-                      color: categoryVisibility[cat.id] !== false ? '#fff' : '#000',
-                    }}
-                  >
-                    {categoryVisibility[cat.id] !== false ? 'Visible' : 'Hidden'}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {sortedCategoriesForDisplay.map((cat) => {
+              const catAudios = getAudiosForCategory(cat.id);
+              const isExpanded = expandedCategory === cat.id;
+              return (
+                <tr key={cat.id} style={{ borderBottom: '1px solid #eee', verticalAlign: 'top' }}>
+                  <td style={{ padding: '8px 4px' }}>
+                    <button onClick={() => moveCategoryOrder(cat.id, -1)} style={smallBtnStyle}>↑</button>
+                    <button onClick={() => moveCategoryOrder(cat.id, 1)} style={smallBtnStyle}>↓</button>
+                    <span style={{ marginLeft: '8px', fontSize: '13px', color: '#999' }}>
+                      {categoryOrder[cat.id] ?? '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px 4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span
+                        onClick={() => setExpandedCategory(isExpanded ? null : cat.id)}
+                        style={{ cursor: 'pointer', fontSize: '14px' }}
+                      >
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
+                      <input
+                        type="text"
+                        value={cat.name}
+                        onChange={(e) => {
+                          setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, name: e.target.value } : c));
+                        }}
+                        style={{ ...inputStyle, width: '180px' }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#999' }}>
+                        {catAudios.length} title{catAudios.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {isExpanded && catAudios.length > 0 && (
+                      <div style={{ marginTop: '8px', marginLeft: '16px' }}>
+                        {catAudios.map((audio, idx) => (
+                          <div key={audio.id} style={{ display: 'flex', alignItems: 'center', padding: '3px 0', gap: '6px' }}>
+                            <button onClick={() => moveAudioInCategory(cat.id, audio.id, -1)} disabled={idx === 0} style={smallBtnStyle}>↑</button>
+                            <button onClick={() => moveAudioInCategory(cat.id, audio.id, 1)} disabled={idx === catAudios.length - 1} style={smallBtnStyle}>↓</button>
+                            <span style={{ fontSize: '13px' }}>
+                              {audio.title || audio.id}
+                              <span style={{ color: '#999', marginLeft: '6px', fontSize: '12px' }}>{audio.id}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ padding: '8px 4px' }}>
+                    <button
+                      onClick={() => setCategoryVisibility(prev => ({ ...prev, [cat.id]: !prev[cat.id] }))}
+                      style={{
+                        ...smallBtnStyle,
+                        background: categoryVisibility[cat.id] !== false ? '#4CAF50' : '#fff',
+                        color: categoryVisibility[cat.id] !== false ? '#fff' : '#000',
+                      }}
+                    >
+                      {categoryVisibility[cat.id] !== false ? 'Visible' : 'Hidden'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
