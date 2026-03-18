@@ -59,13 +59,20 @@ export default function ConfigTab() {
         if (data.config.sectionNames) setSectionNames(prev => ({ ...prev, ...data.config.sectionNames }));
       }
 
-      // Build visibility/order maps from categories
+      // Build visibility/order maps from categories + saved config
       const vis: Record<string, boolean> = {};
       const ord: Record<string, number> = {};
       (data.categories || HISTORY_CATEGORIES).forEach((cat: Category & { visible?: boolean; order?: number }, i: number) => {
         vis[cat.id] = cat.visible !== false;
         ord[cat.id] = cat.order ?? i + 1;
       });
+      // Merge saved section visibility/order (includes built-in sections like __free__, __all__)
+      if (data.config?.sectionVisibility) {
+        Object.assign(vis, data.config.sectionVisibility);
+      }
+      if (data.config?.sectionOrder) {
+        Object.assign(ord, data.config.sectionOrder);
+      }
       setCategoryVisibility(vis);
       setCategoryOrder(ord);
     } catch (err) {
