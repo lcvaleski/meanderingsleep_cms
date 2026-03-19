@@ -50,9 +50,13 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
     
     json.audios.push(newEntry);
     
-    // Add categories to history JSON
+    // Add categories to history JSON — merge passed categories, preserve existing, fallback to hardcoded
     if (fileName === 'history-audio-list.json') {
-      json.categories = categories && Array.isArray(categories) ? categories : HISTORY_CATEGORIES;
+      if (categories && Array.isArray(categories)) {
+        json.categories = categories;
+      } else if (!json.categories || !Array.isArray(json.categories)) {
+        json.categories = HISTORY_CATEGORIES;
+      }
     }
     
     await file.save(JSON.stringify(json, null, 2), {

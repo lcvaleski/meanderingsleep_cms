@@ -73,8 +73,10 @@ export async function POST(request: Request) {
         );
       }
       
-      // Add categories array
-      json.categories = HISTORY_CATEGORIES;
+      // Preserve existing categories, only set if missing
+      if (!json.categories || !Array.isArray(json.categories)) {
+        json.categories = HISTORY_CATEGORIES;
+      }
       
       // Save updated JSON
       await jsonFile.save(JSON.stringify(json, null, 2), {
