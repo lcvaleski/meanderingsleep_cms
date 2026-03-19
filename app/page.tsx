@@ -575,9 +575,64 @@ export default function Home() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>
-              History Sleep Files
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+              <h2 style={{ fontSize: '18px', margin: 0 }}>
+                History Sleep Files
+              </h2>
+              {jsonData.some(a => !a.duration) && (
+                <button
+                  onClick={async () => {
+                    const missing = jsonData.filter(a => !a.duration);
+                    if (missing.length === 0) return;
+                    setError(null);
+                    const durations: Record<string, number> = {};
+                    let done = 0;
+
+                    for (const audio of missing) {
+                      try {
+                        const dur = await new Promise<number>((resolve, reject) => {
+                          const el = new Audio(`https://storage.googleapis.com/active-audio/boringhistory/${audio.id}.mp3`);
+                          el.addEventListener('loadedmetadata', () => {
+                            if (el.duration && isFinite(el.duration)) {
+                              resolve(Math.round(el.duration));
+                            } else {
+                              reject(new Error('No duration'));
+                            }
+                          });
+                          el.addEventListener('error', () => reject(new Error('Load failed')));
+                        });
+                        durations[audio.id] = dur;
+                        done++;
+                      } catch {
+                        console.warn(`Could not get duration for ${audio.id}`);
+                      }
+                    }
+
+                    if (done > 0) {
+                      const res = await fetch('/api/files/backfill-durations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ durations }),
+                      });
+                      if (res.ok) {
+                        await fetchAudioFiles();
+                      } else {
+                        setError('Failed to save durations');
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '4px 12px',
+                    border: '1px solid #000',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                  }}
+                >
+                  Backfill Durations ({jsonData.filter(a => !a.duration).length} missing)
+                </button>
+              )}
+            </div>
 
             {availableVoices.length > 0 && (
               <div style={{ marginBottom: '15px' }}>
