@@ -19,6 +19,7 @@ interface AudioEntry {
   isNew?: boolean;
   category?: string;
   imageUrl?: string;
+  duration?: number;
 }
 
 async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileName: string, newEntry: AudioEntry, categories?: { id: string; name: string }[]) {
@@ -77,7 +78,7 @@ async function updateJsonInBucket(bucket: ReturnType<Storage['bucket']>, fileNam
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { folder, title, gender, topic, id, uploadPath, voiceName, isNew, category, imageUrl, categories } = body;
+    const { folder, title, gender, topic, id, uploadPath, voiceName, isNew, category, imageUrl, categories, duration } = body;
 
     if (!id || !uploadPath) {
       return NextResponse.json(
@@ -104,7 +105,8 @@ export async function POST(request: Request) {
         voice: voiceName || 'Unknown',
         ...(isNew !== undefined && { isNew }),
         ...(category && { category }),
-        ...(imageUrl && { imageUrl })
+        ...(imageUrl && { imageUrl }),
+        ...(duration && { duration })
       };
       jsonFileName = 'history-audio-list.json';
     } else {

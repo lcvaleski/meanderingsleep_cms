@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AudioEntry, HISTORY_CATEGORIES, Category } from '../types/audio';
 
 interface SectionConfig {
@@ -39,6 +39,14 @@ export default function ConfigTab() {
     '__new__': 'New',
     '__all__': 'All Lectures',
   });
+
+  // Drag state for sections
+  const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+
+  // Drag state for audio tracks within sections
+  const [draggedAudio, setDraggedAudio] = useState<{ sectionId: string; audioId: string } | null>(null);
+  const [dragOverAudioId, setDragOverAudioId] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -138,8 +146,6 @@ export default function ConfigTab() {
     );
   };
 
-
-
   // --- Audio order within any section ---
   const getAudiosForSection = (sectionId: string): AudioEntry[] => {
     let sectionAudios: AudioEntry[];
@@ -161,21 +167,116 @@ export default function ConfigTab() {
     });
   };
 
-  const moveAudioInSection = (sectionId: string, audioId: string, direction: -1 | 1) => {
-    const sorted = getAudiosForSection(sectionId);
-    const ids = sorted.map(a => a.id);
-    const idx = ids.indexOf(audioId);
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= ids.length) return;
-    [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
-    setAudioOrder(prev => ({ ...prev, [sectionId]: ids }));
-  };
-
-  if (loading) return <p>Loading config...</p>;
-
+  // --- Build sorted items list ---
   const sortedCategoriesForDisplay = [...categories].sort(
     (a, b) => (categoryOrder[a.id] ?? 99) - (categoryOrder[b.id] ?? 99)
   );
+
+  const builtInSections = [
+    { id: '__daily__', name: 'Daily Card', isBuiltIn: true },
+    { id: '__free__', name: sectionNames['__free__'] || 'Complimentary', isBuiltIn: true },
+    { id: '__new__', name: sectionNames['__new__'] || 'New', isBuiltIn: true },
+    { id: '__all__', name: sectionNames['__all__'] || 'All Lectures', isBuiltIn: true },
+  ];
+
+  const allItems = [
+    ...builtInSections.map(s => ({
+      ...s,
+      order: categoryOrder[s.id] ?? (s.id === '__daily__' ? -4 : s.id === '__free__' ? -3 : s.id === '__new__' ? -2 : -1),
+    })),
+    ...sortedCategoriesForDisplay.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      isBuiltIn: false,
+      order: categoryOrder[cat.id] ?? 99,
+    })),
+  ].sort((a, b) => a.order - b.order);
+
+  // --- Section drag handlers ---
+  const handleSectionDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedSectionId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleSectionDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedSectionId && id !== draggedSectionId) {
+      setDragOverSectionId(id);
+    }
+  };
+
+  const handleSectionDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedSectionId || draggedSectionId === targetId) {
+      setDraggedSectionId(null);
+      setDragOverSectionId(null);
+      return;
+    }
+
+    // Reorder: move dragged item to target position
+    const currentIds = allItems.map(i => i.id);
+    const fromIdx = currentIds.indexOf(draggedSectionId);
+    const toIdx = currentIds.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const reordered = [...currentIds];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedSectionId);
+
+    // Reassign order values
+    const newOrder: Record<string, number> = {};
+    reordered.forEach((id, idx) => {
+      newOrder[id] = idx;
+    });
+    setCategoryOrder(newOrder);
+
+    setDraggedSectionId(null);
+    setDragOverSectionId(null);
+  };
+
+  // --- Audio drag handlers ---
+  const handleAudioDragStart = (e: React.DragEvent, sectionId: string, audioId: string) => {
+    e.stopPropagation();
+    setDraggedAudio({ sectionId, audioId });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', audioId);
+  };
+
+  const handleAudioDragOver = (e: React.DragEvent, audioId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedAudio && audioId !== draggedAudio.audioId) {
+      setDragOverAudioId(audioId);
+    }
+  };
+
+  const handleAudioDrop = (e: React.DragEvent, sectionId: string, targetAudioId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedAudio || draggedAudio.audioId === targetAudioId || draggedAudio.sectionId !== sectionId) {
+      setDraggedAudio(null);
+      setDragOverAudioId(null);
+      return;
+    }
+
+    const sorted = getAudiosForSection(sectionId);
+    const ids = sorted.map(a => a.id);
+    const fromIdx = ids.indexOf(draggedAudio.audioId);
+    const toIdx = ids.indexOf(targetAudioId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, draggedAudio.audioId);
+    setAudioOrder(prev => ({ ...prev, [sectionId]: ids }));
+
+    setDraggedAudio(null);
+    setDragOverAudioId(null);
+  };
+
+  if (loading) return <p>Loading config...</p>;
 
   return (
     <div>
@@ -241,140 +342,143 @@ export default function ConfigTab() {
       <div style={{ marginBottom: '30px' }}>
         <h3 style={{ fontSize: '16px', marginBottom: '10px' }}>Home Screen Sections</h3>
         <p style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
-          Reorder sections and toggle visibility. Hidden sections won&apos;t appear in the app.
+          Drag to reorder sections. Toggle visibility to show/hide in the app.
         </p>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #000' }}>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Order</th>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Section</th>
-              <th style={{ textAlign: 'left', padding: '8px 4px' }}>Visible</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(() => {
-              // Build unified list of all sections: built-in + categories
-              const builtInSections = [
-                { id: '__daily__', name: 'Daily Card', isBuiltIn: true },
-                { id: '__free__', name: sectionNames['__free__'] || 'Complimentary', isBuiltIn: true },
-                { id: '__new__', name: sectionNames['__new__'] || 'New', isBuiltIn: true },
-                { id: '__all__', name: sectionNames['__all__'] || 'All Lectures', isBuiltIn: true },
-              ];
-              const allItems = [
-                ...builtInSections.map(s => ({
-                  ...s,
-                  order: categoryOrder[s.id] ?? (s.id === '__daily__' ? -4 : s.id === '__free__' ? -3 : s.id === '__new__' ? -2 : -1),
-                })),
-                ...sortedCategoriesForDisplay.map(cat => ({
-                  id: cat.id,
-                  name: cat.name,
-                  isBuiltIn: false,
-                  order: categoryOrder[cat.id] ?? 99,
-                })),
-              ].sort((a, b) => a.order - b.order);
+        <div style={{ border: '1px solid #ddd' }}>
+          {allItems.map((item) => {
+            const isCategory = !item.isBuiltIn;
+            const isDaily = item.id === '__daily__';
+            const sectionAudios = isDaily ? [] : getAudiosForSection(item.id);
+            const isExpanded = expandedCategory === item.id;
+            const isVisible = categoryVisibility[item.id] !== false;
+            const isDragging = draggedSectionId === item.id;
+            const isDragOver = dragOverSectionId === item.id;
 
-              return allItems.map((item, idx) => {
-                const isCategory = !item.isBuiltIn;
-                const isDaily = item.id === '__daily__';
-                const sectionAudios = isDaily ? [] : getAudiosForSection(item.id);
-                const isExpanded = expandedCategory === item.id;
-                const isVisible = categoryVisibility[item.id] !== false;
+            return (
+              <div
+                key={item.id}
+                draggable
+                onDragStart={(e) => handleSectionDragStart(e, item.id)}
+                onDragOver={(e) => handleSectionDragOver(e, item.id)}
+                onDrop={(e) => handleSectionDrop(e, item.id)}
+                onDragEnd={() => { setDraggedSectionId(null); setDragOverSectionId(null); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  padding: '10px 12px',
+                  borderBottom: '1px solid #eee',
+                  cursor: 'grab',
+                  opacity: isDragging ? 0.4 : 1,
+                  borderTop: isDragOver ? '2px solid #000' : '2px solid transparent',
+                  backgroundColor: isDragOver ? '#f8f8f8' : '#fff',
+                  transition: 'background-color 0.1s',
+                }}
+              >
+                {/* Drag handle */}
+                <span style={{ color: '#999', marginRight: '10px', fontSize: '16px', cursor: 'grab', userSelect: 'none', lineHeight: '28px' }}>
+                  ≡
+                </span>
 
-                return (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #eee', verticalAlign: 'top' }}>
-                    <td style={{ padding: '8px 4px' }}>
-                      <button onClick={() => {
-                        // Move in unified order
-                        const currentOrder = categoryOrder[item.id] ?? item.order;
-                        const newOrder = currentOrder - 1;
-                        const swapItem = allItems.find(a => (categoryOrder[a.id] ?? a.order) === newOrder);
-                        setCategoryOrder(prev => {
-                          const updated = { ...prev, [item.id]: newOrder };
-                          if (swapItem) updated[swapItem.id] = currentOrder;
-                          return updated;
-                        });
-                      }} disabled={idx === 0} style={smallBtnStyle}>↑</button>
-                      <button onClick={() => {
-                        const currentOrder = categoryOrder[item.id] ?? item.order;
-                        const newOrder = currentOrder + 1;
-                        const swapItem = allItems.find(a => (categoryOrder[a.id] ?? a.order) === newOrder);
-                        setCategoryOrder(prev => {
-                          const updated = { ...prev, [item.id]: newOrder };
-                          if (swapItem) updated[swapItem.id] = currentOrder;
-                          return updated;
-                        });
-                      }} disabled={idx === allItems.length - 1} style={smallBtnStyle}>↓</button>
-                    </td>
-                    <td style={{ padding: '8px 4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {!isDaily && sectionAudios.length > 0 && (
-                          <span
-                            onClick={() => setExpandedCategory(isExpanded ? null : item.id)}
-                            style={{ cursor: 'pointer', fontSize: '14px' }}
-                          >
-                            {isExpanded ? '▼' : '▶'}
-                          </span>
-                        )}
-                        {item.id === '__daily__' ? (
-                          <span style={{ fontSize: '14px', fontWeight: 500 }}>{item.name}</span>
-                        ) : isCategory ? (
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => {
-                              setCategories(prev => prev.map(c => c.id === item.id ? { ...c, name: e.target.value } : c));
-                            }}
-                            style={{ ...inputStyle, width: '180px' }}
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            value={sectionNames[item.id] || item.name}
-                            onChange={(e) => {
-                              setSectionNames(prev => ({ ...prev, [item.id]: e.target.value }));
-                            }}
-                            style={{ ...inputStyle, width: '180px' }}
-                          />
-                        )}
-                        {!isDaily && sectionAudios.length > 0 && (
-                          <span style={{ fontSize: '12px', color: '#999' }}>
-                            {sectionAudios.length} title{sectionAudios.length !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                      {!isDaily && isExpanded && sectionAudios.length > 0 && (
-                        <div style={{ marginTop: '8px', marginLeft: '16px' }}>
-                          {sectionAudios.map((audio, audioIdx) => (
-                            <div key={audio.id} style={{ display: 'flex', alignItems: 'center', padding: '3px 0', gap: '6px' }}>
-                              <button onClick={() => moveAudioInSection(item.id, audio.id, -1)} disabled={audioIdx === 0} style={smallBtnStyle}>↑</button>
-                              <button onClick={() => moveAudioInSection(item.id, audio.id, 1)} disabled={audioIdx === sectionAudios.length - 1} style={smallBtnStyle}>↓</button>
-                              <span style={{ fontSize: '13px' }}>
-                                {audio.title || audio.id}
-                                <span style={{ color: '#999', marginLeft: '6px', fontSize: '12px' }}>{audio.id}</span>
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '8px 4px' }}>
-                      <button
-                        onClick={() => setCategoryVisibility(prev => ({ ...prev, [item.id]: !isVisible }))}
-                        style={{
-                          ...smallBtnStyle,
-                          background: isVisible ? '#4CAF50' : '#fff',
-                          color: isVisible ? '#fff' : '#000',
-                        }}
+                {/* Section content */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {!isDaily && sectionAudios.length > 0 && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); setExpandedCategory(isExpanded ? null : item.id); }}
+                        style={{ cursor: 'pointer', fontSize: '14px', userSelect: 'none' }}
                       >
-                        {isVisible ? 'Visible' : 'Hidden'}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              });
-            })()}
-          </tbody>
-        </table>
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
+                    )}
+                    {item.id === '__daily__' ? (
+                      <span style={{ fontSize: '14px', fontWeight: 500 }}>{item.name}</span>
+                    ) : isCategory ? (
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={(e) => {
+                          setCategories(prev => prev.map(c => c.id === item.id ? { ...c, name: e.target.value } : c));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        draggable={false}
+                        style={{ ...inputStyle, width: '180px' }}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={sectionNames[item.id] || item.name}
+                        onChange={(e) => {
+                          setSectionNames(prev => ({ ...prev, [item.id]: e.target.value }));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        draggable={false}
+                        style={{ ...inputStyle, width: '180px' }}
+                      />
+                    )}
+                    {!isDaily && sectionAudios.length > 0 && (
+                      <span style={{ fontSize: '12px', color: '#999' }}>
+                        {sectionAudios.length} title{sectionAudios.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Expanded audio list within section */}
+                  {!isDaily && isExpanded && sectionAudios.length > 0 && (
+                    <div style={{ marginTop: '8px', marginLeft: '8px' }}>
+                      {sectionAudios.map((audio) => {
+                        const isAudioDragging = draggedAudio?.audioId === audio.id;
+                        const isAudioDragOver = dragOverAudioId === audio.id;
+                        return (
+                          <div
+                            key={audio.id}
+                            draggable
+                            onDragStart={(e) => handleAudioDragStart(e, item.id, audio.id)}
+                            onDragOver={(e) => handleAudioDragOver(e, audio.id)}
+                            onDrop={(e) => handleAudioDrop(e, item.id, audio.id)}
+                            onDragEnd={() => { setDraggedAudio(null); setDragOverAudioId(null); }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '4px 6px',
+                              gap: '6px',
+                              cursor: 'grab',
+                              opacity: isAudioDragging ? 0.4 : 1,
+                              borderTop: isAudioDragOver ? '2px solid #666' : '2px solid transparent',
+                              borderRadius: '3px',
+                            }}
+                          >
+                            <span style={{ color: '#bbb', fontSize: '14px', cursor: 'grab', userSelect: 'none' }}>≡</span>
+                            <span style={{ fontSize: '13px' }}>
+                              {audio.title || audio.id}
+                              <span style={{ color: '#999', marginLeft: '6px', fontSize: '12px' }}>{audio.id}</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Visibility toggle */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setCategoryVisibility(prev => ({ ...prev, [item.id]: !isVisible })); }}
+                  draggable={false}
+                  style={{
+                    ...smallBtnStyle,
+                    background: isVisible ? '#4CAF50' : '#fff',
+                    color: isVisible ? '#fff' : '#000',
+                    marginLeft: '8px',
+                    flexShrink: 0,
+                  }}
+                >
+                  {isVisible ? 'Visible' : 'Hidden'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Save Button */}
@@ -424,5 +528,4 @@ const smallBtnStyle: React.CSSProperties = {
   background: '#fff',
   cursor: 'pointer',
   fontSize: '13px',
-  marginRight: '4px',
 };

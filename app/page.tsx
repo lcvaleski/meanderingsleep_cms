@@ -28,6 +28,7 @@ export default function Home() {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryId, setNewCategoryId] = useState('');
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
 
   const fetchAudioFiles = useCallback(async () => {
     try {
@@ -232,6 +233,16 @@ export default function Home() {
     if (file) {
       setSelectedFile(file);
       setError(null);
+      setAudioDuration(null);
+      // Extract duration using HTML Audio element
+      const url = URL.createObjectURL(file);
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        if (audio.duration && isFinite(audio.duration)) {
+          setAudioDuration(Math.round(audio.duration));
+        }
+        URL.revokeObjectURL(url);
+      });
     }
   };
 
@@ -302,6 +313,7 @@ export default function Home() {
           isNew,
           category,
           categories,
+          duration: audioDuration,
         }),
       });
 
@@ -315,6 +327,7 @@ export default function Home() {
       setVoiceName('');
       setIsNew(false);
       setCategory('');
+      setAudioDuration(null);
       await fetchAudioFiles();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Upload failed');
@@ -532,6 +545,11 @@ export default function Home() {
             {selectedFile && (
               <div style={{ marginBottom: '10px' }}>
                 Selected: {selectedFile.name}
+                {audioDuration && (
+                  <span style={{ marginLeft: '10px', color: '#666' }}>
+                    ({Math.floor(audioDuration / 60)}:{String(audioDuration % 60).padStart(2, '0')})
+                  </span>
+                )}
               </div>
             )}
             

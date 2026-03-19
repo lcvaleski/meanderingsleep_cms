@@ -13,6 +13,7 @@ export interface AudioEntry {
   isNew?: boolean;
   category?: string;
   imageUrl?: string;
+  duration?: number;
 }
 
 export interface Category {
