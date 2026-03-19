@@ -65,6 +65,51 @@ export async function GET() {
   }
 }
 
+// PUT: Save categories only (used when creating/deleting categories)
+export async function PUT(request: Request) {
+  try {
+    const { categories: updatedCategories } = await request.json() as {
+      categories: typeof HISTORY_CATEGORIES;
+    };
+
+    if (!updatedCategories || !Array.isArray(updatedCategories)) {
+      return NextResponse.json({ error: 'categories array is required' }, { status: 400 });
+    }
+
+    const bucket = storage.bucket(bucketName);
+    const jsonFile = bucket.file('history-audio-list.json');
+    const [exists] = await jsonFile.exists();
+
+    if (!exists) {
+      return NextResponse.json({ error: 'JSON file not found' }, { status: 404 });
+    }
+
+    const [contents] = await jsonFile.download();
+    const json: AudioListJson = JSON.parse(contents.toString().trim());
+
+    json.categories = updatedCategories;
+
+    await jsonFile.save(JSON.stringify(json, null, 2), {
+      metadata: {
+        contentType: 'application/json',
+        cacheControl: 'no-cache, no-store, must-revalidate',
+      },
+    });
+    await jsonFile.makePublic();
+
+    return NextResponse.json({
+      message: 'Categories saved successfully',
+      categories: json.categories,
+    });
+  } catch (error) {
+    console.error('Error saving categories:', error);
+    return NextResponse.json(
+      { error: 'Failed to save categories', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 },
+    );
+  }
+}
+
 // POST: Save config to history-audio-list.json
 export async function POST(request: Request) {
   try {

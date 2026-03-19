@@ -429,14 +429,25 @@ export default function Home() {
                     }}
                   />
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (newCategoryName.trim() && newCategoryId.trim()) {
                         const newCat = { id: newCategoryId, name: newCategoryName.trim() };
-                        setCategories(prev => [...prev, newCat]);
+                        const updated = [...categories, newCat];
+                        setCategories(updated);
                         setCategory(newCategoryId);
                         setCreatingCategory(false);
                         setNewCategoryName('');
                         setNewCategoryId('');
+                        // Persist to JSON file immediately
+                        try {
+                          await fetch('/api/config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ categories: updated }),
+                          });
+                        } catch (err) {
+                          console.error('Failed to save new category:', err);
+                        }
                       }
                     }}
                     disabled={!newCategoryName.trim()}
